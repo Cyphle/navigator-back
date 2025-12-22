@@ -93,15 +93,36 @@ struct User {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
-        App::new()
-            .service(hello)
-            .service(echo)
-            .service(users)
-            .service(create_user)
-            .route("/hey", web::get().to(manual_hello))
-    })
-        .bind(("127.0.0.1", 8080))?
-        .run()
+    match PgPoolOptions::new()
+        .max_connections(5)
+        .connect("postgres://postgres:postgres@localhost:5432/navigator")
         .await
+    {
+        Ok(pool) => {
+            println!("Connected to database");
+            // run migrations at startup
+            match sqlx::migrate!("./migrations").run(&pool).await {
+                Ok(_) => (),
+                Err(e) => panic!("Failed to run database migrations: {:?}", e),
+            }
+        },
+        Err(e) => panic!("Failed to connect to database: {:?}", e),
+    };
+
+
+
+    Ok(())
+    //
+    //
+    // HttpServer::new(|| {
+    //     App::new()
+    //         .service(hello)
+    //         .service(echo)
+    //         .service(users)
+    //         .service(create_user)
+    //         .route("/hey", web::get().to(manual_hello))
+    // })
+    //     .bind(("127.0.0.1", 8080))?
+    //     .run()
+    //     .await
 }

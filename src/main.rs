@@ -51,9 +51,10 @@ async fn manual_hello() -> impl Responder {
 }
 
 
+#[post("/users")]
 async fn create_user(
     Json(payload): Json<CreateUser>,
-) -> Result<(StatusCode, Json<User>), actix_web::Error> {
+) -> Result<(Json<User>, StatusCode), actix_web::Error> {
     // connect to the database
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -73,7 +74,7 @@ async fn create_user(
         username: payload.username,
     };
 
-    Ok((StatusCode::CREATED, Json(user)))
+    Ok((Json(user), StatusCode::CREATED))
 }
 
 // the input to our `create_user` handler

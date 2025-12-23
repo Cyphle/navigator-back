@@ -16,9 +16,9 @@ async fn echo(req_body: String) -> impl Responder {
     HttpResponse::Ok().body(req_body)
 }
 
-async fn get_user(pool: &Pool<Postgres>, id: i64) -> Result<(i64,), sqlx::Error> {
+async fn get_user(pool: &Pool<Postgres>, id: i64) -> Result<(i32,), sqlx::Error> {
     // Postgres uses positional parameters like $1
-    let row: (i64,) = sqlx::query_as("SELECT * FROM users LIMIT 1")
+    let row: (i32,) = sqlx::query_as("SELECT id FROM users LIMIT 1")
         .bind(id)
         .fetch_one(pool)
         .await?;
@@ -35,7 +35,7 @@ async fn users() -> Result<impl Responder, actix_web::Error> {
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
-    let row: (i64,) = get_user(&pool, 150_i64)
+    let row: (i32,) = get_user(&pool, 150_i64)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
@@ -65,7 +65,7 @@ async fn create_user(
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
     // insert the user and get the generated id
-    let row: (i64,) = sqlx::query_as("INSERT INTO users (username) VALUES ($1) RETURNING id")
+    let row: (i32,) = sqlx::query_as("INSERT INTO users (username) VALUES ($1) RETURNING id")
         .bind(&payload.username)
         .fetch_one(&pool)
         .await

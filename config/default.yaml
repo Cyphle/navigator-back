@@ -5,7 +5,7 @@ app:
 database:
   host: "localhost"
   port: "5434"
-  name: "banana"
+  name: "navigator"
   schema: "public"
   username: "postgres"
   password: "postgres"
@@ -29,20 +29,20 @@ session:
   session_ttl_days: 5
 
 oidc:
-  url: "http://localhost:8181/realms/Banana"
-  realm_name: "banana"
+  url: "http://localhost:8181/realms/Navigator"
+  realm_name: "navigator"
   redirect_uri: "http://localhost:9000/login"
   logout_uri: "http://localhost:9000/logout"
   client:
-    id: "banana"
-    secret: "banana-secret"
+    id: "navigator"
+    secret: "navigator-secret"
   nonce: "nonce"
   session_timeout_minutes: 10
   admin:
     client:
-      id: "banana-admin"
-      secret: "banana-admin-secret"
-    create_user_url: "http://localhost:8181/admin/realms/Banana/users"
+      id: "navigator-admin"
+      secret: "navigator-admin-secret"
+    create_user_url: "http://localhost:8181/admin/realms/Navigator/users"
 
 cors:
   allowed_origin: "http://localhost:9000"

@@ -1,0 +1,19 @@
+# Configuration locale pour le développement
+# Ce fichier peut être modifié localement sans être commité
+
+database:
+  host: "localhost"
+  port: "5434"
+  name: "banana"
+  username: "postgres"
+  password: "postgres"
+
+oidc:
+  url: "http://localhost:8181/realms/Banana"
+  redirect_uri: "http://localhost:9000/login"
+
+session:
+  store_addr: "redis://127.0.0.1:6379"
+
+cors:
+  allowed_origin: "http://localhost:9000"

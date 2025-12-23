@@ -1,9 +1,13 @@
+mod config;
+mod security;
+mod repositories;
+
 use std::time::Duration;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use actix_web::http::StatusCode;
 use actix_web::web::Json;
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres};
+use sqlx::{Error, Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
 
 #[get("/")]

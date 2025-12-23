@@ -12,29 +12,29 @@ services:
     networks:
       - navigator
 
-#  keycloak:
-#    image: quay.io/keycloak/keycloak:26.3
-#    command:
-#      - start-dev # for testing purposes
-#      - --import-realm
-#    environment:
-#      - KEYCLOAK_ADMIN=admin
-#      - KEYCLOAK_ADMIN_PASSWORD=admin
-#    volumes:
-#      - ./keycloak/realms/navigator.json:/opt/keycloak/data/import/navigator.json
-#    ports:
-#      - "8181:8080"
-#    networks:
-#      - navigator
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command:
+      - start-dev # for testing purposes
+      - --import-realm
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    volumes:
+      - ./keycloak/realms/navigator.json:/opt/keycloak/data/import/navigator.json
+    ports:
+      - "8181:8080"
+    networks:
+      - navigator
 
-#  redis:
-#    image: redis:latest
-#    ports:
-#      - "6379:6379"
-#    volumes:
-#      - redis_data:/data
-#    networks:
-#      - navigator
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - navigator
       
 volumes:
   navigatorpgdata:

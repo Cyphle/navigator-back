@@ -1,6 +1,7 @@
 mod config;
 mod security;
 mod repositories;
+mod domain;
 
 use std::time::Duration;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
@@ -99,7 +100,7 @@ async fn manual_hello() -> impl Responder {
 #[post("/users")]
 async fn create_user(
     Json(payload): Json<CreateUser>,
-) -> Result<(Json<User>, StatusCode), actix_web::Error> {
+) -> Result<(Json<UserDao>, StatusCode), actix_web::Error> {
     sqlx::any::install_default_drivers();
     let pool = AnyPoolOptions::new()
         .max_connections(5)
@@ -115,7 +116,7 @@ async fn create_user(
 async fn create_user_with_pool(
     pool: &AnyPool,
     payload: CreateUser,
-) -> Result<(User, StatusCode), actix_web::Error> {
+) -> Result<(UserDao, StatusCode), actix_web::Error> {
     // connect to the database
     // insert the user and get the generated id
     let row: (i32,) = sqlx::query_as("INSERT INTO users (username) VALUES ($1) RETURNING id")
@@ -124,7 +125,7 @@ async fn create_user_with_pool(
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
-    let user = User {
+    let user = UserDao {
         id: row.0 as u64,
         username: payload.username,
     };
@@ -140,7 +141,7 @@ struct CreateUser {
 
 // the output to our `create_user` handler
 #[derive(Serialize)]
-struct User {
+struct UserDao {
     id: u64,
     username: String,
 }

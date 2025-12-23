@@ -48,7 +48,7 @@
     "realm": [
       {
         "id": "4983045c-7f10-491e-952b-71336bf987b5",
-        "name": "default-roles-banana",
+        "name": "default-roles-navigator",
         "description": "${role_default-roles}",
         "composite": true,
         "composites": {
@@ -87,7 +87,7 @@
       }
     ],
     "client": {
-      "banana": [],
+      "navigator": [],
       "realm-management": [
         {
           "id": "b4e72432-eb2d-4ff9-9614-f18178fbe137",
@@ -300,7 +300,7 @@
           "attributes": {}
         }
       ],
-      "banana-admin": [],
+      "navigator-admin": [],
       "security-admin-console": [],
       "admin-cli": [],
       "account-console": [],
@@ -408,7 +408,7 @@
   "groups": [],
   "defaultRole": {
     "id": "4983045c-7f10-491e-952b-71336bf987b5",
-    "name": "default-roles-banana",
+    "name": "default-roles-navigator",
     "description": "${role_default-roles}",
     "composite": true,
     "clientRole": false,
@@ -459,16 +459,16 @@
   "users": [
     {
       "id": "90bd713a-f107-4a5a-b6c5-bebb2c28a980",
-      "username": "service-account-banana-admin",
+      "username": "service-account-navigator-admin",
       "emailVerified": false,
       "createdTimestamp": 1737217604889,
       "enabled": true,
       "totp": false,
-      "serviceAccountClientId": "banana-admin",
+      "serviceAccountClientId": "navigator-admin",
       "disableableCredentialTypes": [],
       "requiredActions": [],
       "realmRoles": [
-        "default-roles-banana"
+        "default-roles-navigator"
       ],
       "clientRoles": {
         "realm-management": [
@@ -643,7 +643,7 @@
     },
     {
       "id": "d9a04fc5-466c-4a2b-a8d5-7f0301b4dcdf",
-      "clientId": "banana",
+      "clientId": "navigator",
       "name": "",
       "description": "",
       "rootUrl": "",
@@ -653,7 +653,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "banana-secret",
+      "secret": "navigator-secret",
       "redirectUris": [
         "http://localhost:8181/*"
       ],
@@ -754,7 +754,7 @@
     },
     {
       "id": "89bfad5c-2cb9-4cf5-a889-a9560ced5313",
-      "clientId": "banana-admin",
+      "clientId": "navigator-admin",
       "name": "",
       "description": "",
       "rootUrl": "",
@@ -764,7 +764,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "banana-admin-secret",
+      "secret": "navigator-admin-secret",
       "redirectUris": [
         "/*"
       ],

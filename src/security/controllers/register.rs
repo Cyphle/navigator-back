@@ -34,8 +34,7 @@
 //     pub last_name: String,
 //     pub password: String,
 // }
-// 
-// TODO et faut adapter les repo à sqlx
+//
 // #[post("/register")]
 // pub async fn register(
 //     payload: web::Json<RegisterRequest>,

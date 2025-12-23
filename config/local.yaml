@@ -4,12 +4,12 @@
 database:
   host: "localhost"
   port: "5434"
-  name: "banana"
+  name: "navigator"
   username: "postgres"
   password: "postgres"
 
 oidc:
-  url: "http://localhost:8181/realms/Banana"
+  url: "http://localhost:8181/realms/Navigator"
   redirect_uri: "http://localhost:9000/login"
 
 session:

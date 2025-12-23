@@ -1,6 +1,6 @@
 {
   "id": "90ca7b39-a00c-4bd5-a66c-0b533ff2f368",
-  "realm": "Banana",
+  "realm": "Navigator",
   "notBefore": 0,
   "defaultSignatureAlgorithm": "RS256",
   "revokeRefreshToken": false,
@@ -504,13 +504,13 @@
       "clientId": "account",
       "name": "${client_account}",
       "rootUrl": "${authBaseUrl}",
-      "baseUrl": "/realms/Banana/account/",
+      "baseUrl": "/realms/Navigator/account/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "/realms/Banana/account/*"
+        "/realms/Navigator/account/*"
       ],
       "webOrigins": [],
       "notBefore": 0,
@@ -549,13 +549,13 @@
       "clientId": "account-console",
       "name": "${client_account-console}",
       "rootUrl": "${authBaseUrl}",
-      "baseUrl": "/realms/Banana/account/",
+      "baseUrl": "/realms/Navigator/account/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "/realms/Banana/account/*"
+        "/realms/Navigator/account/*"
       ],
       "webOrigins": [],
       "notBefore": 0,
@@ -940,13 +940,13 @@
       "clientId": "security-admin-console",
       "name": "${client_security-admin-console}",
       "rootUrl": "${authAdminUrl}",
-      "baseUrl": "/admin/Banana/console/",
+      "baseUrl": "/admin/Navigator/console/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "/admin/Banana/console/*"
+        "/admin/Navigator/console/*"
       ],
       "webOrigins": [
         "+"

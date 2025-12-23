@@ -10,6 +10,44 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Error, Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
 
+
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    match PgPoolOptions::new()
+        .max_connections(5)
+        .acquire_timeout(Duration::from_secs(2))
+        .connect("postgres://postgres:postgres@localhost:5434/navigator")
+        .await
+    {
+        Ok(pool) => {
+            println!("Connected to database");
+            // run migrations at startup
+            match sqlx::migrate!("./migrations").run(&pool).await {
+                Ok(_) => println!("Database migrations completed successfully"),
+                Err(e) => panic!("Failed to run database migrations: {:?}", e),
+            }
+
+            HttpServer::new(|| {
+                App::new()
+                    .service(hello)
+                    .service(echo)
+                    .service(users)
+                    .service(create_user)
+                    .route("/hey", web::get().to(manual_hello))
+            })
+                .bind(("127.0.0.1", 8080))?
+                .run()
+                .await
+        },
+        Err(e) => panic!("Failed to connect to database: {:?}", e),
+    }
+}
+
+
+
+// ===> EXAMPLES
+
 #[get("/")]
 async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Hello world!")
@@ -94,37 +132,4 @@ struct CreateUser {
 struct User {
     id: u64,
     username: String,
-}
-
-
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    match PgPoolOptions::new()
-        .max_connections(5)
-        .acquire_timeout(Duration::from_secs(2))
-        .connect("postgres://postgres:postgres@localhost:5434/navigator")
-        .await
-    {
-        Ok(pool) => {
-            println!("Connected to database");
-            // run migrations at startup
-            match sqlx::migrate!("./migrations").run(&pool).await {
-                Ok(_) => println!("Database migrations completed successfully"),
-                Err(e) => panic!("Failed to run database migrations: {:?}", e),
-            }
-
-            HttpServer::new(|| {
-                App::new()
-                    .service(hello)
-                    .service(echo)
-                    .service(users)
-                    .service(create_user)
-                    .route("/hey", web::get().to(manual_hello))
-            })
-                .bind(("127.0.0.1", 8080))?
-                .run()
-                .await
-        },
-        Err(e) => panic!("Failed to connect to database: {:?}", e),
-    }
 }

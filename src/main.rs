@@ -7,14 +7,14 @@ use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use actix_web::http::StatusCode;
 use actix_web::web::Json;
 use serde::{Deserialize, Serialize};
-use sqlx::{Error, Pool, Postgres};
+use sqlx::{AnyPool, FromRow, Pool, Postgres};
+use sqlx::any::AnyPoolOptions;
 use sqlx::postgres::PgPoolOptions;
-
-
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    match PgPoolOptions::new()
+    sqlx::any::install_default_drivers();
+    match AnyPoolOptions::new()
         .max_connections(5)
         .acquire_timeout(Duration::from_secs(2))
         .connect("postgres://postgres:postgres@localhost:5434/navigator")
@@ -71,6 +71,7 @@ async fn get_user(pool: &Pool<Postgres>, id: i64) -> Result<(i32,), sqlx::Error>
 #[get("/users")]
 async fn users() -> Result<impl Responder, actix_web::Error> {
     println!("Fetcing one user");
+    sqlx::any::install_default_drivers();
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect("postgres://postgres:postgres@localhost:5434/navigator")
@@ -99,17 +100,27 @@ async fn manual_hello() -> impl Responder {
 async fn create_user(
     Json(payload): Json<CreateUser>,
 ) -> Result<(Json<User>, StatusCode), actix_web::Error> {
-    // connect to the database
-    let pool = PgPoolOptions::new()
+    sqlx::any::install_default_drivers();
+    let pool = AnyPoolOptions::new()
         .max_connections(5)
         .connect("postgres://postgres:postgres@localhost:5434/navigator")
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
+    let (user, status) = create_user_with_pool(&pool, payload).await?;
+
+    Ok((Json(user), status))
+}
+
+async fn create_user_with_pool(
+    pool: &AnyPool,
+    payload: CreateUser,
+) -> Result<(User, StatusCode), actix_web::Error> {
+    // connect to the database
     // insert the user and get the generated id
     let row: (i32,) = sqlx::query_as("INSERT INTO users (username) VALUES ($1) RETURNING id")
         .bind(&payload.username)
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await
         .map_err(actix_web::error::ErrorInternalServerError)?;
 
@@ -118,11 +129,11 @@ async fn create_user(
         username: payload.username,
     };
 
-    Ok((Json(user), StatusCode::CREATED))
+    Ok((user, StatusCode::CREATED))
 }
 
 // the input to our `create_user` handler
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct CreateUser {
     username: String,
 }

@@ -1,0 +1,277 @@
+warning: unused import: `Bearer`
+ --> src/config/actix.rs:2:14
+  |
+2 | use openid::{Bearer, Client, Discovered, StandardClaims};
+  |              ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+warning: unused import: `collections::HashMap`
+ --> src/config/actix.rs:4:11
+  |
+4 | use std::{collections::HashMap, sync::Mutex};
+  |           ^^^^^^^^^^^^^^^^^^^^
+warning: unused import: `debug`
+ --> src/security/controllers/logout.rs:4:11
+  |
+4 | use log::{debug, error, info};
+  |           ^^^^^
+warning: function `config` is never used
+ --> src/config/logger.rs:7:8
+  |
+7 | pub fn config(config: &LoggingConfig) {
+  |        ^^^^^^
+  |
+  = note: `#[warn(dead_code)]` on by default
+warning: struct `ActixState` is never constructed
+ --> src/config/actix.rs:7:12
+  |
+7 | pub struct ActixState {
+  |            ^^^^^^^^^^
+warning: fields `app`, `database`, `oidc`, `session`, `cors`, and `logging` are never read
+  --> src/config/application.rs:9:9
+   |
+8  | pub struct AppConfig {
+   |            --------- fields in this struct
+9  |     pub app: AppServerConfig,
+   |         ^^^
+10 |     pub database: DatabaseConfig,
+   |         ^^^^^^^^
+11 |     pub oidc: OidcConfig,
+   |         ^^^^
+12 |     pub session: SessionConfig,
+   |         ^^^^^^^
+13 |     pub cors: CorsConfig,
+   |         ^^^^
+14 |     pub logging: LoggingConfig,
+   |         ^^^^^^^
+   |
+   = note: `AppConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: fields `port` and `host` are never read
+  --> src/config/application.rs:19:9
+   |
+18 | pub struct AppServerConfig {
+   |            --------------- fields in this struct
+19 |     pub port: u16,
+   |         ^^^^
+20 |     pub host: String,
+   |         ^^^^
+   |
+   = note: `AppServerConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: field `level` is never read
+  --> src/config/application.rs:25:9
+   |
+24 | pub struct LoggingConfig {
+   |            ------------- field in this struct
+25 |     pub level: String,
+   |         ^^^^^
+   |
+   = note: `LoggingConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: associated items `new`, `get_session_store_url`, and `get_cookie_name` are never used
+  --> src/config/application.rs:29:12
+   |
+28 | impl AppConfig {
+   | -------------- associated items in this implementation
+29 |     pub fn new() -> Result<Self, config::ConfigError> {
+   |            ^^^
+...
+39 |     pub fn get_session_store_url(&self) -> String {
+   |            ^^^^^^^^^^^^^^^^^^^^^
+...
+49 |     pub fn get_cookie_name(&self) -> String {
+   |            ^^^^^^^^^^^^^^^
+warning: static `USER_SESSION_KEY` is never used
+  --> src/config/application.rs:54:12
+   |
+54 | pub static USER_SESSION_KEY: &str = "navigator_user_session";
+   |            ^^^^^^^^^^^^^^^^
+warning: multiple fields are never read
+  --> src/config/database.rs:8:9
+   |
+7  | pub struct DatabaseConfig {
+   |            -------------- fields in this struct
+8  |     pub host: String,
+   |         ^^^^
+9  |     pub port: String,
+   |         ^^^^
+10 |     pub name: String,
+   |         ^^^^
+11 |     pub username: String,
+   |         ^^^^^^^^
+12 |     pub password: String,
+   |         ^^^^^^^^
+13 |     pub max_connections: u32,
+   |         ^^^^^^^^^^^^^^^
+14 |     pub connect_timeout: u64,
+   |         ^^^^^^^^^^^^^^^
+15 |     pub acquire_timeout: u64,
+   |         ^^^^^^^^^^^^^^^
+16 |     pub idle_timeout: u64,
+   |         ^^^^^^^^^^^^
+17 |     pub max_lifetime: u64
+   |         ^^^^^^^^^^^^
+   |
+   = note: `DatabaseConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: function `connect` is never used
+  --> src/config/database.rs:20:14
+   |
+20 | pub async fn connect(config: &DatabaseConfig) -> Result<Pool<Postgres>, Error> {
+   |              ^^^^^^^
+warning: fields `database`, `store_addr`, `cookie_name`, and `session_ttl_days` are never read
+ --> src/config/session.rs:5:9
+  |
+4 | pub struct SessionConfig {
+  |            ------------- fields in this struct
+5 |     pub database: SessionDatabaseConfig,
+  |         ^^^^^^^^
+6 |     pub store_addr: String,
+  |         ^^^^^^^^^^
+7 |     pub cookie_name: Option<String>,
+  |         ^^^^^^^^^^^
+8 |     pub session_ttl_days: u64
+  |         ^^^^^^^^^^^^^^^^
+  |
+  = note: `SessionConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: fields `host`, `port`, `password`, `username`, and `db` are never read
+  --> src/config/session.rs:13:9
+   |
+12 | pub struct SessionDatabaseConfig {
+   |            --------------------- fields in this struct
+13 |     pub host: String,
+   |         ^^^^
+14 |     pub port: String,
+   |         ^^^^
+15 |     pub password: String,
+   |         ^^^^^^^^
+16 |     pub username: String,
+   |         ^^^^^^^^
+17 |     pub db: u8,
+   |         ^^
+   |
+   = note: `SessionDatabaseConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: fields `allowed_origin`, `allowed_methods`, `allowed_headers`, `supports_credentials`, `max_age`, and `additional_headers` are never read
+  --> src/config/cors.rs:5:9
+   |
+4  | pub struct CorsConfig {
+   |            ---------- fields in this struct
+5  |     pub allowed_origin: String,
+   |         ^^^^^^^^^^^^^^
+6  |     pub allowed_methods: Vec<String>,
+   |         ^^^^^^^^^^^^^^^
+7  |     pub allowed_headers: Vec<String>,
+   |         ^^^^^^^^^^^^^^^
+8  |     pub supports_credentials: bool,
+   |         ^^^^^^^^^^^^^^^^^^^^
+9  |     pub max_age: u64,
+   |         ^^^^^^^
+10 |     pub additional_headers: Option<String>,
+   |         ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `CorsConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: fields `client` and `create_user_url` are never read
+ --> src/security/oidc.rs:7:9
+  |
+6 | pub struct OidcAdminConfig {
+  |            --------------- fields in this struct
+7 |     pub client: OidcClientConfig,
+  |         ^^^^^^
+8 |     pub create_user_url: String,
+  |         ^^^^^^^^^^^^^^^
+  |
+  = note: `OidcAdminConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: fields `id` and `secret` are never read
+  --> src/security/oidc.rs:13:9
+   |
+12 | pub struct OidcClientConfig {
+   |            ---------------- fields in this struct
+13 |     pub id: String,
+   |         ^^
+14 |     pub secret: String
+   |         ^^^^^^
+   |
+   = note: `OidcClientConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: multiple fields are never read
+  --> src/security/oidc.rs:19:9
+   |
+18 | pub struct OidcConfig {
+   |            ---------- fields in this struct
+19 |     pub url: String,
+   |         ^^^
+20 |     pub realm_name: String,
+   |         ^^^^^^^^^^
+21 |     pub redirect_uri: String,
+   |         ^^^^^^^^^^^^
+22 |     pub logout_uri: String,
+   |         ^^^^^^^^^^
+23 |     pub client: OidcClientConfig,
+   |         ^^^^^^
+24 |     pub nonce: Option<String>,
+   |         ^^^^^
+25 |     pub session_timeout_minutes: Option<i64>,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+26 |     pub admin: OidcAdminConfig,
+   |         ^^^^^
+   |
+   = note: `OidcConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+warning: method `get_max_age` is never used
+  --> src/security/oidc.rs:30:12
+   |
+29 | impl OidcConfig {
+   | --------------- method in this implementation
+30 |     pub fn get_max_age(&self) -> Option<Duration> {
+   |            ^^^^^^^^^^^
+warning: function `get_client` is never used
+  --> src/security/oidc.rs:35:14
+   |
+35 | pub async fn get_client(config: &OidcConfig) -> Client<openid::Discovered, StandardClaims> {
+   |              ^^^^^^^^^^
+warning: function `get_username_from_bearer` is never used
+  --> src/security/token.rs:12:14
+   |
+12 | pub async fn get_username_from_bearer(
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^
+warning: function `get_username_from_session` is never used
+  --> src/security/token.rs:31:14
+   |
+31 | pub async fn get_username_from_session(
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+warning: fields `access_token`, `token_type`, and `expires_in` are never read
+  --> src/security/token.rs:55:5
+   |
+54 | struct TokenResponse {
+   |        ------------- fields in this struct
+55 |     access_token: String,
+   |     ^^^^^^^^^^^^
+56 |     token_type: String,
+   |     ^^^^^^^^^^
+57 |     expires_in: u64,
+   |     ^^^^^^^^^^
+warning: function `get_admin_access_token` is never used
+  --> src/security/token.rs:61:14
+   |
+61 | pub async fn get_admin_access_token(
+   |              ^^^^^^^^^^^^^^^^^^^^^^
+warning: function `save_in_session` is never used
+  --> src/security/controllers/login.rs:62:4
+   |
+62 | fn save_in_session(session: Session, token: &Token) {
+   |    ^^^^^^^^^^^^^^^
+warning: function `build_logout_url` is never used
+  --> src/security/controllers/logout.rs:51:14
+   |
+51 | pub async fn build_logout_url(
+   |              ^^^^^^^^^^^^^^^^
+warning: fields `code`, `session_state`, and `iss` are never read
+ --> src/security/controllers/auth_request.rs:5:9
+  |
+4 | pub struct AuthRequest {
+  |            ----------- fields in this struct
+5 |     pub code: Option<String>,
+  |         ^^^^
+6 |     session_state: Option<String>,
+  |     ^^^^^^^^^^^^^
+7 |     iss: Option<String>,
+  |     ^^^
+  |
+  = note: `AuthRequest` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+warning: `navigator-back` (bin "navigator-back") generated 27 warnings (run `cargo fix --bin "navigator-back"` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s

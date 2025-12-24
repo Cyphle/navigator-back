@@ -1,51 +1,61 @@
 mod config;
-mod security;
-mod repositories;
 mod domain;
+mod repositories;
+mod security;
 
-use std::time::Duration;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use crate::config::database::connect;
 use actix_web::http::StatusCode;
 use actix_web::web::Json;
+use actix_web::{App, HttpResponse, HttpServer, Responder, get, post, web};
+use log::info;
 use serde::{Deserialize, Serialize};
-use sqlx::{AnyPool, FromRow, Pool, Postgres};
 use sqlx::any::AnyPoolOptions;
 use sqlx::postgres::PgPoolOptions;
+use sqlx::{AnyPool, FromRow, Pool, Postgres};
+use std::time::Duration;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    sqlx::any::install_default_drivers();
-    match AnyPoolOptions::new()
-        .max_connections(5)
-        .acquire_timeout(Duration::from_secs(2))
-        .connect("postgres://postgres:postgres@localhost:5434/navigator")
-        .await
-    {
-        Ok(pool) => {
-            println!("Connected to database");
-            // run migrations at startup
-            match sqlx::migrate!("./migrations").run(&pool).await {
-                Ok(_) => println!("Database migrations completed successfully"),
+    match config::application::AppConfig::new() {
+        Ok(config) => {
+            config::logger::config(&config.logging);
+
+            // DATABASE
+            info!("Connecting to database");
+            let connection = connect(&config.database).await;
+
+            info!("Connected to database");
+            match sqlx::migrate!("./migrations").run(&connection).await {
+                Ok(_) => {
+                    info!("Database migrations completed successfully");
+
+                    HttpServer::new(|| {
+                        App::new()
+                            .service(hello)
+                            .service(echo)
+                            .service(users)
+                            .service(create_user)
+                            .route("/hey", web::get().to(manual_hello))
+                    })
+                        .bind(("127.0.0.1", 8080))?
+                        .run()
+                        .await
+                },
                 Err(e) => panic!("Failed to run database migrations: {:?}", e),
             }
-
-            HttpServer::new(|| {
-                App::new()
-                    .service(hello)
-                    .service(echo)
-                    .service(users)
-                    .service(create_user)
-                    .route("/hey", web::get().to(manual_hello))
-            })
-                .bind(("127.0.0.1", 8080))?
-                .run()
-                .await
-        },
-        Err(e) => panic!("Failed to connect to database: {:?}", e),
+        }
+        Err(e) => {
+            log::error!(
+                "Error while loading application configuration: {:?}.\nCannot start server.",
+                e
+            );
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Configuration error",
+            ));
+        }
     }
 }
-
-
 
 // ===> EXAMPLES
 
@@ -88,14 +98,12 @@ async fn users() -> Result<impl Responder, actix_web::Error> {
     // run migrations at startup
     // sqlx::migrate!("./migrations").run(&pool).await?;
 
-
     Ok(HttpResponse::Ok().body("PostDB endpoint"))
 }
 
 async fn manual_hello() -> impl Responder {
     HttpResponse::Ok().body("Hey there!")
 }
-
 
 #[post("/users")]
 async fn create_user(

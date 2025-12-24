@@ -1,6 +1,6 @@
 pub mod logger;
 pub mod actix;
 pub mod application;
-mod database;
+pub mod database;
 mod session;
 mod cors;

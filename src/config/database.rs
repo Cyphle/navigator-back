@@ -17,13 +17,19 @@ pub struct DatabaseConfig {
     pub max_lifetime: u64
 }
 
-pub async fn connect(config: &DatabaseConfig) -> Result<Pool<Postgres>, Error> {
+pub async fn connect(config: &DatabaseConfig) -> Pool<Postgres> {
     let connexion_string = "postgres://".to_string() + &config.username + ":" + &config.password + "@" + &config.host + ":" + &config.port + "/" + &config.name;
-    PgPoolOptions::new()
+    match PgPoolOptions::new()
         .max_connections(config.max_connections)
         .acquire_timeout(Duration::from_secs(config.acquire_timeout))
         .idle_timeout(Duration::from_secs(config.idle_timeout))
         .max_lifetime(Duration::from_secs(config.max_lifetime))
         .connect(&connexion_string)
-        .await
+        .await {
+        Ok(pool) => pool,
+        Err(error) => {
+            log::error!("Failed to connect to database: {}", error);
+            panic!("Failed to connect to database: {}", error);
+        }
+    }
 }

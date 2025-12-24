@@ -2,6 +2,8 @@ use crate::{config::database::DatabaseConfig, security::oidc::OidcConfig};
 use crate::config::session::SessionConfig;
 use config::{Config, Environment, File};
 use serde::Deserialize;
+use std::path::PathBuf;
+use log::info;
 use crate::config::cors::CorsConfig;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -27,9 +29,16 @@ pub struct LoggingConfig {
 
 impl AppConfig {
     pub fn new() -> Result<Self, config::ConfigError> {
+        info!("Loading application configuration...");
+        let config_dir = std::env::var("NAVIGATOR_CONFIG_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("config"));
+        let default_path = config_dir.join("default");
+        let local_path = config_dir.join("local");
+
         let config = Config::builder()
-            .add_source(File::with_name("config/default"))
-            .add_source(File::with_name("config/local").required(false))
+            .add_source(File::with_name(default_path.to_string_lossy().as_ref()))
+            .add_source(File::with_name(local_path.to_string_lossy().as_ref()).required(false))
             .add_source(Environment::with_prefix("NAVIGATOR").separator("_"))
             .build()?;
 

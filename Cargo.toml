@@ -3,9 +3,12 @@ name = "navigator-back"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [".", "migration"]
+
 [dependencies]
+migration = { path = "migration" }
 actix-web = "4"
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "macros", "postgres", "sqlite", "any", "uuid"] }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1.0.219", features = ["derive"] }
 env_logger = "0.11.8"
@@ -19,3 +22,12 @@ config = "0.15.19"
 rust_decimal = "1.39.0"
 url = "2.5.7"
 uuid = { version = "1.19.0", features = ["v4"] }
+sea-orm = { version = "2.0.0-rc.22", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros", "mock" ] }
+
+[dependencies.sea-orm-migration]
+version = "2.0.0-rc.22"
+default-features = false
+features = ["runtime-tokio-native-tls", "sqlx-postgres"]
+
+[patch.crates-io]
+sea-query = { path = "vendor/sea-query-1.0.0-rc.23" }

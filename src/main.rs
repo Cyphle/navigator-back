@@ -3,6 +3,7 @@ mod domain;
 mod repositories;
 mod security;
 
+use std::sync::{Arc, Mutex};
 use crate::config::database::connect;
 use actix_web::http::StatusCode;
 use actix_web::web::Json;
@@ -13,6 +14,14 @@ use sqlx::any::AnyPoolOptions;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{AnyPool, FromRow, Pool, Postgres};
 use std::time::Duration;
+use actix_cors::Cors;
+use crate::security::oidc::get_client;
+use actix_session::config::PersistentSession;
+use actix_session::SessionMiddleware;
+use actix_session::storage::RedisSessionStore;
+use crate::config::actix::ActixState;
+use crate::repositories::user::SqlxUserRepository;
+use actix_web::cookie::{time, Key};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -29,15 +38,69 @@ async fn main() -> std::io::Result<()> {
                 Ok(_) => {
                     info!("Database migrations completed successfully");
 
-                    HttpServer::new(|| {
+                    // OIDC
+                    info!("Configuring OIDC client...");
+                    let oidc_client = Arc::new(Mutex::new(get_client(&config.oidc).await));
+
+                    // Session
+                    info!("Configuring session store...");
+                    let session_key = Key::from(&[0; 64]);
+                    let session_store = RedisSessionStore::new(config.get_session_store_url())
+                        .await
+                        .unwrap();
+
+                    // Clone config parts needed in the closure
+                    let cors_config = config.cors.clone();
+                    let app_config = config.app.clone();
+
+                    // Repositories
+                    let user_repository = SqlxUserRepository { };
+
+                    // Actix
+                    let state = web::Data::new(ActixState {
+                        oidc_config: config.oidc.clone(),
+                        oidc_client: Some(oidc_client.clone()),
+
+                        db_connection: connection,
+                        user_repository: Arc::new(user_repository)
+                    });
+
+                    info!("Starting Actix server...");
+                    HttpServer::new(move || {
                         App::new()
-                            .service(hello)
-                            .service(echo)
-                            .service(users)
-                            .service(create_user)
-                            .route("/hey", web::get().to(manual_hello))
+                            .wrap(
+                                Cors::default()
+                                    .allowed_origin(cors_config.allowed_origin.as_str())
+                                    .allowed_methods(
+                                        cors_config
+                                            .allowed_methods
+                                            .iter()
+                                            .map(|m| m.parse::<actix_web::http::Method>().unwrap())
+                                            .collect::<Vec<_>>(),
+                                    )
+                                    .allowed_headers(vec![actix_web::http::header::CONTENT_TYPE])
+                                    .supports_credentials() // Optional, if credentials are used
+                                    .max_age(3600),
+                            )
+                            .wrap(
+                                SessionMiddleware::builder(session_store.clone(), session_key.clone())
+                                    .session_lifecycle(
+                                        PersistentSession::default().session_ttl(time::Duration::days(5)),
+                                    )
+                                    .cookie_secure(false)
+                                    .cookie_name(config.get_cookie_name())
+                                    .build(),
+                            )
+                            .app_data(state.clone())
+                                    .service(hello)
+                                    .service(echo)
+                                    .service(users)
+                                    .service(create_user)
+                            // Technical
+                            // .service(live)
+                            // .service(ready)
                     })
-                        .bind(("127.0.0.1", 8080))?
+                        .bind(format!("{}:{}", app_config.host, app_config.port))?
                         .run()
                         .await
                 },

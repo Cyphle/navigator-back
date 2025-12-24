@@ -14,7 +14,7 @@ chrono = "0.4.42"
 log = "0.4.29"
 openid = "0.18.3"
 reqwest = "0.12.28"
-actix-session = "0.11.0"
+actix-session = {  version = "0.11.0", features = ["cookie-session", "redis-session"] }
 actix-cors = "0.7.1"
 config = "0.15.19"
 rust_decimal = "1.39.0"

@@ -1,0 +1,46 @@
+services:
+  navigator-postgresql:
+    image: postgres:16.3
+    environment:
+      POSTGRES_DB: navigator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - navigatorpgdata:/var/lib/postgresql/data
+    networks:
+      - navigator
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command:
+      - start-dev # for testing purposes
+      - --import-realm
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    volumes:
+      - ./keycloak/realms/navigator.json:/opt/keycloak/data/import/navigator.json
+    ports:
+      - "8181:8080"
+    networks:
+      - navigator
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - navigator
+      
+volumes:
+  navigatorpgdata:
+  redis_data:
+    driver: local
+  
+networks:
+  navigator:
+    driver: bridge

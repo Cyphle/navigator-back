@@ -1,0 +1,55 @@
+app:
+  port: 9000
+  host: "0.0.0.0"
+
+database:
+  host: "localhost"
+  port: "5434"
+  name: "navigator"
+  schema: "public"
+  username: "postgres"
+  password: "postgres"
+  max_connections: 100
+  min_connections: 5
+  connect_timeout: 8
+  acquire_timeout: 8
+  idle_timeout: 8
+  max_lifetime: 8
+  sqlx_logging: true
+
+session:
+  database:
+    host: "localhost"
+    port: "6379"
+    db: 0
+    username: ""
+    password: ""
+  store_addr: "redis://127.0.0.1:6379"
+  cookie_name: "actix_cookie"
+  session_ttl_days: 5
+
+oidc:
+  url: "http://localhost:8181/realms/Navigator"
+  realm_name: "navigator"
+  redirect_uri: "http://localhost:9000/login"
+  logout_uri: "http://localhost:9000/logout"
+  client:
+    id: "navigator"
+    secret: "navigator-secret"
+  nonce: "nonce"
+  session_timeout_minutes: 10
+  admin:
+    client:
+      id: "navigator-admin"
+      secret: "navigator-admin-secret"
+    create_user_url: "http://localhost:8181/admin/realms/Navigator/users"
+
+cors:
+  allowed_origin: "http://localhost:9000"
+  allowed_methods: ["GET", "POST"]
+  allowed_headers: ["Content-Type"]
+  supports_credentials: true
+  max_age: 3600
+
+logging:
+  level: "debug"

@@ -64,6 +64,10 @@ pub async fn register(
         Ok(_) => {
             match state.oidc_client.as_ref() {
                 Some(client) => {
+                    if let Err(e) = tx.commit().await {
+                        return HttpResponse::InternalServerError().body(e.to_string());
+                    }
+
                     let client = client.lock().unwrap();
                     let admin_token = get_admin_access_token(&client, &state.oidc_config.admin).await.unwrap();
 
@@ -85,10 +89,17 @@ pub async fn register(
                         .send()
                         .await {
                         Ok(response) => {
-                            info!("User created in keycloak: {:?}", response);
+                            let status = response.status();
+                            let body = response.text().await.unwrap_or_default();
+
+                            if status.is_success() {
+                                info!("User created in keycloak: status={}, body={}", status, body);
+                            } else {
+                                error!("Keycloak create user failed: status={}, body={}", status, body);
+                            }
                         }
                         Err(e) => {
-                            println!("Error creating user in keycloak: {:?}", e);
+                            error!("Error creating user in keycloak: {:?}", e);
                         }
                     }
                 },

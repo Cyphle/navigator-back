@@ -11,7 +11,7 @@ struct UserView {
 }
 
 #[get("/users/me")]
-pub async fn user_me(session: Session, state: web::Data<ActixState>) -> impl Responder {
+pub async fn users_me(session: Session, state: web::Data<ActixState>) -> impl Responder {
     log::debug!("Calling users me");
 
     let client = state.oidc_client.as_ref().unwrap().lock().unwrap();

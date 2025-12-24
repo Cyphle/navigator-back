@@ -54,7 +54,7 @@ impl UserRepository for SqlxUserRepository {
     ) -> Result<UserEntity, sqlx::Error> {
         // Postgres uses positional parameters like $1
         let row = sqlx::query_as::<sqlx::Postgres, UserEntity>(
-            "SELECT id FROM users WHERE username = $1 LIMIT 1",
+            "SELECT id, username FROM users WHERE username = $1 LIMIT 1",
         )
             .bind(username)
             .fetch_one(&mut **tx)

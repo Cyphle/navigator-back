@@ -23,7 +23,7 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{AnyPool, FromRow, Pool, Postgres};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use crate::http::controllers::user::user_me;
+use crate::http::controllers::user::users_me;
 use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
 use crate::security::controllers::register::register;
@@ -112,7 +112,7 @@ async fn main() -> std::io::Result<()> {
                             .service(login)
                             .service(logout)
                             .service(register)
-                            .service(user_me)
+                            .service(users_me)
                         // Technical
                         // .service(live)
                         // .service(ready)

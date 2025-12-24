@@ -48,7 +48,7 @@ impl UserRepository for SqlxUserRepository {
     }
 
     // Upsert user
-    pub async fn get_or_create_user<'e, E>(
+    async fn get_or_create_user<'e, E>(
         exec: E,
         user: &User,
     ) -> Result<UserEntity, sqlx::Error>

@@ -51,7 +51,7 @@ async fn main() -> std::io::Result<()> {
             );
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "Configuration error",
+                e,
             ));
         }
     }

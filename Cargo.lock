@@ -1863,6 +1863,7 @@ dependencies = [
  "actix-cors",
  "actix-session",
  "actix-web",
+ "async-trait",
  "chrono",
  "config",
  "env_logger",

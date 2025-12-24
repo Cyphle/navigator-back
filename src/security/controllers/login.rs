@@ -14,6 +14,8 @@ async fn login(
     state: Data<ActixState>,
     query: web::Query<AuthRequest>,
 ) -> impl Responder {
+    log::debug!("Received login request");
+
     let client = state.oidc_client.as_ref().unwrap().lock().unwrap();
 
     match &query.code {

@@ -52,4 +52,4 @@ cors:
   max_age: 3600
 
 logging:
-  level: "info"
+  level: "debug"

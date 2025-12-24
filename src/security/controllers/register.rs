@@ -8,7 +8,7 @@ use openid::{Client, Discovered, StandardClaims};
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use crate::domain::user::User;
+use crate::domain::user::user::User;
 use crate::repositories;
 use crate::security::controllers::auth_request::AuthRequest;
 
@@ -33,7 +33,7 @@ pub struct RegisterRequest {
     pub email: String,
     pub first_name: String,
     pub last_name: String,
-    pub password: String,
+    pub password: Option<String>,
 }
 
 #[post("/register")]
@@ -43,6 +43,8 @@ pub async fn register(
     state: Data<ActixState>,
     _: web::Query<AuthRequest>,
 ) -> impl Responder {
+    log::debug!("Register reuqest");
+
     let request_payload = payload.into_inner();
     let user = User {
         username: request_payload.username.to_owned(),
@@ -71,7 +73,7 @@ pub async fn register(
                         enabled: true,
                         credentials: vec![KeycloakCredential {
                             r#type: "password".to_string(),
-                            value: request_payload.password.to_owned().to_string(),
+                            value: request_payload.password.unwrap_or("coucou".to_string()),
                             temporary: false,
                         }],
                     };

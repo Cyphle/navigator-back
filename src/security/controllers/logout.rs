@@ -14,6 +14,8 @@ async fn logout(
     state: Data<ActixState>,
     _: web::Query<AuthRequest>,
 ) -> impl Responder {
+    log::debug!("Logging out user");
+
     let user_session = session.get::<Bearer>(USER_SESSION_KEY);
     let client = state.oidc_client.as_ref().unwrap().lock().unwrap();
     let logout_uri: &str = state.oidc_config.logout_uri.as_ref();
@@ -25,7 +27,9 @@ async fn logout(
                     Ok(logout_url) => {
                         session.remove(USER_SESSION_KEY);
                         info!("Redirecting to logout URL: {}", logout_url);
-                        return HttpResponse::Found()
+
+                        // TODO y a un petit truc qui est pas bien géré pour finir le logout. Mais sinon ça marche
+                        return HttpResponse::PermanentRedirect()
                             .append_header(("Location", logout_url.to_string()))
                             .finish();
                     }
@@ -41,6 +45,9 @@ async fn logout(
         },
         Err(e) => {
             error!("No session data found: {}", e);
+            return HttpResponse::PermanentRedirect()
+                .append_header(("Location", "/"))
+                .finish();
         }
     }
 

@@ -1,12 +1,12 @@
-use crate::domain::user::User;
 use actix_web::http::StatusCode;
 use async_trait::async_trait;
 use sqlx::{FromRow, Postgres, Transaction};
+use crate::domain::user::user::User;
 
 #[derive(Debug, FromRow)]
-struct UserEntity {
+pub struct UserEntity {
     id: i32,
-    username: String,
+    pub username: String,
 }
 
 #[async_trait]

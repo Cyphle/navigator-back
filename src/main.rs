@@ -3,8 +3,15 @@ mod domain;
 mod repositories;
 mod security;
 
-use std::sync::{Arc, Mutex};
+use crate::config::actix::ActixState;
 use crate::config::database::connect;
+use crate::repositories::user::SqlxUserRepository;
+use crate::security::oidc::get_client;
+use actix_cors::Cors;
+use actix_session::SessionMiddleware;
+use actix_session::config::PersistentSession;
+use actix_session::storage::RedisSessionStore;
+use actix_web::cookie::{Key, time};
 use actix_web::http::StatusCode;
 use actix_web::web::Json;
 use actix_web::{App, HttpResponse, HttpServer, Responder, get, post, web};
@@ -13,15 +20,11 @@ use serde::{Deserialize, Serialize};
 use sqlx::any::AnyPoolOptions;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{AnyPool, FromRow, Pool, Postgres};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use actix_cors::Cors;
-use crate::security::oidc::get_client;
-use actix_session::config::PersistentSession;
-use actix_session::SessionMiddleware;
-use actix_session::storage::RedisSessionStore;
-use crate::config::actix::ActixState;
-use crate::repositories::user::SqlxUserRepository;
-use actix_web::cookie::{time, Key};
+use crate::security::controllers::login::login;
+use crate::security::controllers::logout::logout;
+use crate::security::controllers::register::register;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -54,7 +57,7 @@ async fn main() -> std::io::Result<()> {
                     let app_config = config.app.clone();
 
                     // Repositories
-                    let user_repository = SqlxUserRepository { };
+                    let user_repository = SqlxUserRepository {};
 
                     // Actix
                     let state = web::Data::new(ActixState {
@@ -62,7 +65,7 @@ async fn main() -> std::io::Result<()> {
                         oidc_client: Some(oidc_client.clone()),
 
                         db_connection: connection,
-                        user_repository: Arc::new(user_repository)
+                        user_repository: Arc::new(user_repository),
                     });
 
                     info!("Starting Actix server...");
@@ -83,27 +86,36 @@ async fn main() -> std::io::Result<()> {
                                     .max_age(3600),
                             )
                             .wrap(
-                                SessionMiddleware::builder(session_store.clone(), session_key.clone())
-                                    .session_lifecycle(
-                                        PersistentSession::default().session_ttl(time::Duration::days(5)),
-                                    )
-                                    .cookie_secure(false)
-                                    .cookie_name(config.get_cookie_name())
-                                    .build(),
+                                SessionMiddleware::builder(
+                                    session_store.clone(),
+                                    session_key.clone(),
+                                )
+                                .session_lifecycle(
+                                    PersistentSession::default()
+                                        .session_ttl(time::Duration::days(5)),
+                                )
+                                .cookie_secure(false)
+                                .cookie_name(config.get_cookie_name())
+                                .build(),
                             )
                             .app_data(state.clone())
-                                    .service(hello)
-                                    .service(echo)
-                                    .service(users)
-                                    .service(create_user)
-                            // Technical
-                            // .service(live)
-                            // .service(ready)
+
+                            .service(hello)
+                            .service(echo)
+                            .service(users)
+                            .service(create_user)
+
+                            .service(login)
+                            .service(logout)
+                            .service(register)
+                        // Technical
+                        // .service(live)
+                        // .service(ready)
                     })
-                        .bind(format!("{}:{}", app_config.host, app_config.port))?
-                        .run()
-                        .await
-                },
+                    .bind(format!("{}:{}", app_config.host, app_config.port))?
+                    .run()
+                    .await
+                }
                 Err(e) => panic!("Failed to run database migrations: {:?}", e),
             }
         }
@@ -112,10 +124,7 @@ async fn main() -> std::io::Result<()> {
                 "Error while loading application configuration: {:?}.\nCannot start server.",
                 e
             );
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e,
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
         }
     }
 }

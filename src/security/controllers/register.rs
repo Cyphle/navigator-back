@@ -72,6 +72,7 @@ pub async fn register(
                     let client = client.lock().unwrap();
                     let admin_token = get_admin_access_token(&client, &state.oidc_config.admin).await.unwrap();
 
+                    // TODO là y a deux fois username
                     let new_user = KeycloakUser {
                         username: user.username.clone(),
                         email: user.username.clone(),

@@ -1,12 +1,17 @@
 mod config;
 mod domain;
+mod http;
 mod repositories;
 mod security;
-mod http;
 
 use crate::config::actix::ActixState;
 use crate::config::database::connect;
+use crate::http::controllers::technical::{live, ready};
+use crate::http::controllers::user::users_me;
 use crate::repositories::user::SqlxUserRepository;
+use crate::security::controllers::login::login;
+use crate::security::controllers::logout::logout;
+use crate::security::controllers::register::register;
 use crate::security::oidc::get_client;
 use actix_cors::Cors;
 use actix_session::SessionMiddleware;
@@ -23,10 +28,6 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{AnyPool, FromRow, Pool, Postgres};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use crate::http::controllers::user::users_me;
-use crate::security::controllers::login::login;
-use crate::security::controllers::logout::logout;
-use crate::security::controllers::register::register;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -83,7 +84,16 @@ async fn main() -> std::io::Result<()> {
                                             .map(|m| m.parse::<actix_web::http::Method>().unwrap())
                                             .collect::<Vec<_>>(),
                                     )
-                                    .allowed_headers(vec![actix_web::http::header::CONTENT_TYPE])
+                                    .allowed_headers(
+                                        cors_config
+                                            .allowed_headers
+                                            .iter()
+                                            .map(|h| {
+                                                h.parse::<actix_web::http::header::HeaderName>()
+                                                    .unwrap()
+                                            })
+                                            .collect::<Vec<_>>(),
+                                    )
                                     .supports_credentials() // Optional, if credentials are used
                                     .max_age(3600),
                             )
@@ -101,21 +111,19 @@ async fn main() -> std::io::Result<()> {
                                 .build(),
                             )
                             .app_data(state.clone())
-
                             // Tests
                             .service(hello)
                             .service(echo)
                             .service(users)
                             .service(create_user)
-
                             // Login & stuffs
                             .service(login)
                             .service(logout)
                             .service(register)
                             .service(users_me)
-                        // Technical
-                        // .service(live)
-                        // .service(ready)
+                            // Technical
+                            .service(live)
+                            .service(ready)
                     })
                     .bind(format!("{}:{}", app_config.host, app_config.port))?
                     .run()

@@ -10,20 +10,20 @@ pub struct UserEntity {
 }
 
 #[async_trait]
-pub trait UserRepository: Send + Sync {
+pub trait UserRepository<Tx>: Send + Sync {
     async fn create_user(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Tx,
         user: &User,
     ) -> Result<(u64, StatusCode), sqlx::Error>;
     async fn get_user(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Tx,
         username: &str,
     ) -> Result<UserEntity, sqlx::Error>;
     async fn get_or_create_user(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Tx,
         user: &User,
     ) -> Result<UserEntity, sqlx::Error>;
 }
@@ -31,11 +31,11 @@ pub trait UserRepository: Send + Sync {
 pub struct SqlxUserRepository;
 
 #[async_trait]
-impl UserRepository for SqlxUserRepository {
+impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
     // Create user
     async fn create_user(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'a, Postgres>,
         user: &User,
     ) -> Result<(u64, StatusCode), sqlx::Error> {
         let row: (i32,) = sqlx::query_as("INSERT INTO users (username) VALUES ($1) RETURNING id")
@@ -49,7 +49,7 @@ impl UserRepository for SqlxUserRepository {
     // Get user
     async fn get_user(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'a, Postgres>,
         username: &str,
     ) -> Result<UserEntity, sqlx::Error> {
         // Postgres uses positional parameters like $1
@@ -66,7 +66,7 @@ impl UserRepository for SqlxUserRepository {
     // Upsert user
     async fn get_or_create_user(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'a, Postgres>,
         user: &User,
     ) -> Result<UserEntity, sqlx::Error> {
         let user = sqlx::query_as::<Postgres, UserEntity>(
@@ -83,5 +83,140 @@ impl UserRepository for SqlxUserRepository {
             .await?;
 
         Ok(user)
+    }
+}
+
+
+// Mock repository for tests: returns fixed values and ignores the database transaction
+pub struct MockUserRepository {
+    pub fixed_id: u64,
+    pub fixed_username: String,
+}
+
+impl Default for MockUserRepository {
+    fn default() -> Self {
+        Self {
+            fixed_id: 1,
+            fixed_username: "mock_user".to_string(),
+        }
+    }
+}
+
+impl MockUserRepository {
+    fn fixed_entity(&self) -> UserEntity {
+        UserEntity {
+            id: self.fixed_id as i32,
+            username: self.fixed_username.clone(),
+        }
+    }
+
+    fn fixed_create_response(&self) -> (u64, StatusCode) {
+        (self.fixed_id, StatusCode::CREATED)
+    }
+}
+
+#[async_trait]
+impl<'a> UserRepository<Transaction<'a, Postgres>> for MockUserRepository {
+    async fn create_user(
+        &self,
+        _tx: &mut Transaction<'a, Postgres>,
+        _user: &User,
+    ) -> Result<(u64, StatusCode), sqlx::Error> {
+        Ok(self.fixed_create_response())
+    }
+
+    async fn get_user(
+        &self,
+        _tx: &mut Transaction<'a, Postgres>,
+        _username: &str,
+    ) -> Result<UserEntity, sqlx::Error> {
+        Ok(self.fixed_entity())
+    }
+
+    async fn get_or_create_user(
+        &self,
+        _tx: &mut Transaction<'a, Postgres>,
+        _user: &User,
+    ) -> Result<UserEntity, sqlx::Error> {
+        Ok(self.fixed_entity())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockTransaction;
+
+    #[async_trait]
+    impl UserRepository<MockTransaction> for MockUserRepository {
+        async fn create_user(
+            &self,
+            _tx: &mut MockTransaction,
+            _user: &User,
+        ) -> Result<(u64, StatusCode), sqlx::Error> {
+            Ok(self.fixed_create_response())
+        }
+
+        async fn get_user(
+            &self,
+            _tx: &mut MockTransaction,
+            _username: &str,
+        ) -> Result<UserEntity, sqlx::Error> {
+            Ok(self.fixed_entity())
+        }
+
+        async fn get_or_create_user(
+            &self,
+            _tx: &mut MockTransaction,
+            _user: &User,
+        ) -> Result<UserEntity, sqlx::Error> {
+            Ok(self.fixed_entity())
+        }
+    }
+
+    #[tokio::test]
+    async fn mock_repo_create_user_returns_fixed_values() {
+        let repo = MockUserRepository {
+            fixed_id: 42,
+            fixed_username: "alice".to_string(),
+        };
+        let mut tx = MockTransaction;
+        let user = User {
+            username: "ignored".to_string(),
+        };
+
+        let result = repo.create_user(&mut tx, &user).await.unwrap();
+        assert_eq!(result.0, 42);
+        assert_eq!(result.1, StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn mock_repo_get_user_returns_fixed_entity() {
+        let repo = MockUserRepository {
+            fixed_id: 7,
+            fixed_username: "bob".to_string(),
+        };
+        let mut tx = MockTransaction;
+
+        let entity = repo.get_user(&mut tx, "ignored").await.unwrap();
+        assert_eq!(entity.id, 7);
+        assert_eq!(entity.username, "bob");
+    }
+
+    #[tokio::test]
+    async fn mock_repo_get_or_create_returns_fixed_entity() {
+        let repo = MockUserRepository {
+            fixed_id: 9,
+            fixed_username: "carol".to_string(),
+        };
+        let mut tx = MockTransaction;
+        let user = User {
+            username: "ignored".to_string(),
+        };
+
+        let entity = repo.get_or_create_user(&mut tx, &user).await.unwrap();
+        assert_eq!(entity.id, 9);
+        assert_eq!(entity.username, "carol");
     }
 }

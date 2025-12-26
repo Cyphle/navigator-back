@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use crate::domain::user::user::User;
 use crate::repositories;
+use crate::repositories::user::UserRepository;
 use crate::security::controllers::auth_request::AuthRequest;
 
 #[derive(Serialize)]

@@ -3,6 +3,7 @@ use actix_web::{get, web, HttpResponse, Responder};
 use log::{debug, error};
 use serde::Serialize;
 use crate::config::actix::ActixState;
+use crate::repositories::user::UserRepository;
 use crate::security::token::get_username_from_session;
 
 #[derive(Serialize)]

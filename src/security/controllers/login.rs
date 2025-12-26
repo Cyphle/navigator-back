@@ -24,7 +24,8 @@ async fn login(
                 "Requesting token with received authorization code: {}",
                 authorization_code
             );
-    
+
+            // TODO il faudrait check l'iss et l'aud ici aussi (check OIDC claims)
             let nonce: Option<&str> = state.oidc_config.nonce.as_deref();
             let max_age_duration = state.oidc_config.get_max_age();
             let max_age: Option<&Duration> = max_age_duration.as_ref();
@@ -33,7 +34,7 @@ async fn login(
                 Ok(token) => {
                     save_in_session(session, &token);
     
-                    // TODO ici il faut rediriger vers le referer qui a lancé le login
+                    // TODO ici il faut rediriger vers le referer qui a lancé le login (mettre dans la session et si pas de referer, utiliser un defaut front url)
                     HttpResponse::PermanentRedirect()
                         .append_header(("Location", "http://localhost:5173/"))
                         .finish()

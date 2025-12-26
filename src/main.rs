@@ -25,6 +25,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use crate::repositories::family::SqlxFamilyRepository;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -58,6 +59,7 @@ async fn main() -> std::io::Result<()> {
 
                     // Repositories
                     let user_repository = SqlxUserRepository {};
+                    let family_repository = SqlxFamilyRepository {};
 
                     // Actix
                     let state = web::Data::new(ActixState {
@@ -66,6 +68,7 @@ async fn main() -> std::io::Result<()> {
 
                         db_connection: connection,
                         user_repository: Arc::new(user_repository),
+                        family_repository: Arc::new(family_repository)
                     });
 
                     info!("Starting Actix server...");

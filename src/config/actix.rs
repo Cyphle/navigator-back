@@ -1,17 +1,47 @@
-use crate::security::oidc::OidcConfig;
-use openid::{Bearer, Client, Discovered, StandardClaims};
-use std::sync::Arc;
-use std::{collections::HashMap, sync::Mutex};
-use sqlx::{Pool, Postgres, Transaction};
+use crate::repositories::family::{FamilyRepository, SqlxFamilyRepository};
 use crate::repositories::user::{SqlxUserRepository, UserRepository};
+use crate::security::oidc::OidcConfig;
+use openid::{Client, Discovered, StandardClaims};
+use sqlx::{Pool, Postgres, Transaction};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Mutex;
 
-pub struct ActixState<R = SqlxUserRepository>
+pub trait DbConnection: Send + Sync {
+    type Tx<'a>: Send
+    where
+        Self: 'a;
+
+    fn begin<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Tx<'a>, sqlx::Error>> + Send + 'a>>;
+}
+
+impl DbConnection for Pool<Postgres> {
+    type Tx<'a> = Transaction<'a, Postgres>;
+
+    fn begin<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Tx<'a>, sqlx::Error>> + Send + 'a>> {
+        Box::pin(async move { self.begin().await })
+    }
+}
+
+pub struct ActixState<
+    DB = Pool<Postgres>,
+    U = SqlxUserRepository,
+    F = SqlxFamilyRepository,
+>
 where
-    R: for<'a> UserRepository<Transaction<'a, Postgres>>,
+    DB: DbConnection,
+    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
+    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
     pub oidc_config: OidcConfig,
     pub oidc_client: Option<Arc<Mutex<Client<Discovered, StandardClaims>>>>,
 
-    pub db_connection: Pool<Postgres>,
-    pub user_repository: Arc<R>,
+    pub db_connection: DB,
+    pub user_repository: Arc<U>,
+    pub family_repository: Arc<F>,
 }

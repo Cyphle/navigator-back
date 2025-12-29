@@ -64,6 +64,7 @@ mod tests {
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, HttpResponse};
     use async_trait::async_trait;
+    use spy::{spy, Spy};
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
@@ -195,16 +196,25 @@ mod tests {
     #[actix_web::test]
     async fn should_return_unauthorized_without_session() {
         let state = make_state();
+        let (spy_handler, spy) = spy!();
         let app = test::init_service(
             App::new()
                 .app_data(state.clone())
                 .route(
                     "/families",
-                    web::get().to(super::get_families_with_state::<
-                        MockPoolPostgres,
-                        MockUserRepository,
-                        MockFamilyRepository,
-                    >),
+                    web::get().to(
+                        move |session: actix_session::Session,
+                              state: web::Data<
+                            ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>,
+                        >| {
+                            spy_handler();
+                            super::get_families_with_state::<
+                                MockPoolPostgres,
+                                MockUserRepository,
+                                MockFamilyRepository,
+                            >(session, state)
+                        },
+                    ),
                 ),
         )
         .await;
@@ -212,5 +222,8 @@ mod tests {
         let req = test::TestRequest::get().uri("/families").to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        drop(app);
+        let snapshot = spy.snapshot();
+        assert_eq!(snapshot.num_of_calls(), 1);
     }
 }

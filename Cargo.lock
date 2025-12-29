@@ -1903,6 +1903,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "spy",
  "sqlx",
  "tokio",
  "url",
@@ -2921,6 +2922,12 @@ dependencies = [
  "base64ct",
  "der",
 ]
+
+[[package]]
+name = "spy"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c7743a85b2548ff761eb8ac3ba6f0708a375b59437d9c221c36fa5b75c3aecf"
 
 [[package]]
 name = "sqlx"

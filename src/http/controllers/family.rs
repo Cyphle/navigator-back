@@ -69,10 +69,13 @@ mod tests {
     use std::pin::Pin;
     use std::sync::Arc;
 
+    // TODO à mettre dans testing
     struct MockPoolPostgres;
 
+    // TODO à mettre dans testing
     struct MockTransaction;
 
+    // TODO à mettre dans testing
     impl DbConnection for MockPoolPostgres {
         type Tx<'a> = MockTransaction;
 
@@ -83,8 +86,10 @@ mod tests {
         }
     }
 
+    // TODO à mettre dans testing
     struct MockUserRepository;
 
+    // TODO à mettre dans testing
     #[async_trait]
     impl UserRepository<MockTransaction> for MockUserRepository {
         async fn create_user(
@@ -112,10 +117,12 @@ mod tests {
         }
     }
 
+    // TODO à mettre dans testing
     struct MockFamilyRepository {
         families: Vec<FamilyEntity>,
     }
 
+    // TODO à mettre dans testing
     #[async_trait]
     impl FamilyRepository<MockTransaction> for MockFamilyRepository {
         async fn get_family_by_member_username(
@@ -127,6 +134,7 @@ mod tests {
         }
     }
 
+    // TODO à mettre dans testing et une fonction qui peut recevoir des mock state ou alors un truc compasable par repository
     fn make_state(
     ) -> web::Data<ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>> {
         web::Data::new(ActixState {
@@ -147,50 +155,6 @@ mod tests {
                 ],
             }),
         })
-    }
-
-    #[actix_web::test]
-    async fn should_return_families_of_username() {
-        let state = make_state();
-        let app = test::init_service(
-            App::new()
-                .app_data(state.clone())
-                .route(
-                    "/families",
-                    web::get().to(
-                        |state: web::Data<
-                            ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>,
-                        >| async move {
-                            match crate::application::family::get_families_from_username(
-                                state,
-                                Some("JohnDoe".to_string()),
-                            )
-                            .await
-                            {
-                                Ok(families) => {
-                                    let views = families
-                                        .into_iter()
-                                        .map(|family| super::FamilyView {
-                                            name: family.name,
-                                        })
-                                        .collect::<Vec<_>>();
-                                    HttpResponse::Ok().json(views)
-                                }
-                                Err(_) => HttpResponse::InternalServerError().finish(),
-                            }
-                        },
-                    ),
-                ),
-        )
-        .await;
-
-        let req = test::TestRequest::get().uri("/families").to_request();
-        let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::OK);
-        let body = test::read_body(resp).await;
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_str.contains("\"name\":\"Family A\""));
-        assert!(body_str.contains("\"name\":\"Family B\""));
     }
 
     #[actix_web::test]

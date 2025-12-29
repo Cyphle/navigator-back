@@ -17,6 +17,7 @@ Navigate through your life swiftly.
 - Partager une todo liste avec toute une famille ou quelques membres de la famille
 
 ## Agenda
+-> ou alors lier à google agenda
 - Ajouter des agendas
 - Partager des agendas
 - Ajouter un événement

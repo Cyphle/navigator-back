@@ -3,6 +3,7 @@ mod domain;
 mod http;
 mod repositories;
 mod security;
+mod testing;
 
 use crate::config::actix::ActixState;
 use crate::config::database::connect;
@@ -25,6 +26,9 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use crate::config::application::AppConfig;
+use crate::config::cors::actix_cors_config;
+use crate::config::session::actix_session_config;
 use crate::repositories::family::SqlxFamilyRepository;
 
 #[actix_web::main]
@@ -74,42 +78,8 @@ async fn main() -> std::io::Result<()> {
                     info!("Starting Actix server...");
                     HttpServer::new(move || {
                         App::new()
-                            .wrap(
-                                Cors::default()
-                                    .allowed_origin(cors_config.allowed_origin.as_str())
-                                    .allowed_methods(
-                                        cors_config
-                                            .allowed_methods
-                                            .iter()
-                                            .map(|m| m.parse::<actix_web::http::Method>().unwrap())
-                                            .collect::<Vec<_>>(),
-                                    )
-                                    .allowed_headers(
-                                        cors_config
-                                            .allowed_headers
-                                            .iter()
-                                            .map(|h| {
-                                                h.parse::<actix_web::http::header::HeaderName>()
-                                                    .unwrap()
-                                            })
-                                            .collect::<Vec<_>>(),
-                                    )
-                                    .supports_credentials() // Optional, if credentials are used
-                                    .max_age(3600),
-                            )
-                            .wrap(
-                                SessionMiddleware::builder(
-                                    session_store.clone(),
-                                    session_key.clone(),
-                                )
-                                .session_lifecycle(
-                                    PersistentSession::default()
-                                        .session_ttl(time::Duration::days(5)),
-                                )
-                                .cookie_secure(false)
-                                .cookie_name(config.get_cookie_name())
-                                .build(),
-                            )
+                            .wrap(actix_cors_config(&cors_config))
+                            .wrap(actix_session_config(&config, session_key.clone(), session_store.clone()))
                             .app_data(state.clone())
                             // Login & stuffs
                             .service(login)
@@ -136,3 +106,4 @@ async fn main() -> std::io::Result<()> {
         }
     }
 }
+

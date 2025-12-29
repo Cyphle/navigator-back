@@ -25,10 +25,10 @@ pub async fn get_families(session: Session, state: web::Data<ActixState>) -> imp
         None => None,
     };
 
-    get_families_with_username(state, username).await
+    get_families_from_username(state, username).await
 }
 
-async fn get_families_with_username<DB, U, F>(
+async fn get_families_from_username<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
     username: Option<String>,
 ) -> impl Responder
@@ -68,7 +68,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::get_families_with_username;
+    use super::get_families_from_username;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App};
     use async_trait::async_trait;
@@ -79,6 +79,7 @@ mod tests {
     use crate::repositories::family::{FamilyEntity, FamilyRepository};
     use crate::repositories::user::UserRepository;
     use crate::security::oidc::{OidcAdminConfig, OidcClientConfig, OidcConfig};
+    use crate::testing::security::oidc::dummy_oidc_config;
 
     struct MockPoolPostgres;
 
@@ -138,28 +139,6 @@ mod tests {
         }
     }
 
-    fn dummy_oidc_config() -> OidcConfig {
-        OidcConfig {
-            url: "http://localhost".to_string(),
-            realm_name: "realm".to_string(),
-            redirect_uri: "http://localhost/callback".to_string(),
-            logout_uri: "http://localhost/logout".to_string(),
-            client: OidcClientConfig {
-                id: "client_id".to_string(),
-                secret: "client_secret".to_string(),
-            },
-            nonce: None,
-            session_timeout_minutes: None,
-            admin: OidcAdminConfig {
-                client: OidcClientConfig {
-                    id: "admin_client".to_string(),
-                    secret: "admin_secret".to_string(),
-                },
-                create_user_url: "http://localhost/create".to_string(),
-            },
-        }
-    }
-
     fn make_state() -> web::Data<ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>> {
         web::Data::new(ActixState {
             db_connection: MockPoolPostgres,
@@ -190,7 +169,7 @@ mod tests {
                 .route(
                     "/families",
                     web::get().to(|state: web::Data<ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>>| async move {
-                        get_families_with_username(state, Some("JohnDoe".to_string())).await
+                        get_families_from_username(state, Some("JohnDoe".to_string())).await
                     }),
                 ),
         )

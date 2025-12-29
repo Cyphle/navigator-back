@@ -4,6 +4,7 @@ mod http;
 mod repositories;
 mod security;
 mod testing;
+mod application;
 
 use crate::config::actix::ActixState;
 use crate::config::database::connect;

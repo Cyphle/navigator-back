@@ -51,12 +51,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::config::actix::ActixState;
     use crate::repositories::family::FamilyEntity;
-    use crate::testing::actix::mock_state::mock_actix_state;
-    use crate::testing::repositories::mock_database::MockPoolPostgres;
-    use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
-    use crate::testing::repositories::mock_user_repository::MockUserRepository;
+    use crate::testing::actix::mock_state::{mock_actix_state, MockActixState};
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App};
     use spy::{spy, Spy};
@@ -81,15 +77,9 @@ mod tests {
                     "/families",
                     web::get().to(
                         move |session: actix_session::Session,
-                              state: web::Data<
-                                  ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>,
-                              >| {
+                              state: web::Data<MockActixState>| {
                             spy_handler();
-                            super::get_families_middleware::<
-                                MockPoolPostgres,
-                                MockUserRepository,
-                                MockFamilyRepository,
-                            >(session, state)
+                            super::get_families_middleware(session, state)
                         },
                     ),
                 ),

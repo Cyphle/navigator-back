@@ -5,7 +5,7 @@ use crate::domain::user::user::User;
 
 #[derive(Debug, FromRow)]
 pub struct UserEntity {
-    id: i32,
+    pub id: i32,
     pub username: String,
 }
 
@@ -86,94 +86,11 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
     }
 }
 
-
-// Mock repository for tests: returns fixed values and ignores the database transaction
-pub struct MockUserRepository {
-    pub fixed_id: u64,
-    pub fixed_username: String,
-}
-
-impl Default for MockUserRepository {
-    fn default() -> Self {
-        Self {
-            fixed_id: 1,
-            fixed_username: "mock_user".to_string(),
-        }
-    }
-}
-
-impl MockUserRepository {
-    fn fixed_entity(&self) -> UserEntity {
-        UserEntity {
-            id: self.fixed_id as i32,
-            username: self.fixed_username.clone(),
-        }
-    }
-
-    fn fixed_create_response(&self) -> (u64, StatusCode) {
-        (self.fixed_id, StatusCode::CREATED)
-    }
-}
-
-#[async_trait]
-impl<'a> UserRepository<Transaction<'a, Postgres>> for MockUserRepository {
-    async fn create_user(
-        &self,
-        _tx: &mut Transaction<'a, Postgres>,
-        _user: &User,
-    ) -> Result<(u64, StatusCode), sqlx::Error> {
-        Ok(self.fixed_create_response())
-    }
-
-    async fn get_user(
-        &self,
-        _tx: &mut Transaction<'a, Postgres>,
-        _username: &str,
-    ) -> Result<UserEntity, sqlx::Error> {
-        Ok(self.fixed_entity())
-    }
-
-    async fn get_or_create_user(
-        &self,
-        _tx: &mut Transaction<'a, Postgres>,
-        _user: &User,
-    ) -> Result<UserEntity, sqlx::Error> {
-        Ok(self.fixed_entity())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    struct MockTransaction;
-
-    #[async_trait]
-    impl UserRepository<MockTransaction> for MockUserRepository {
-        async fn create_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _user: &User,
-        ) -> Result<(u64, StatusCode), sqlx::Error> {
-            Ok(self.fixed_create_response())
-        }
-
-        async fn get_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _username: &str,
-        ) -> Result<UserEntity, sqlx::Error> {
-            Ok(self.fixed_entity())
-        }
-
-        async fn get_or_create_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _user: &User,
-        ) -> Result<UserEntity, sqlx::Error> {
-            Ok(self.fixed_entity())
-        }
-    }
+    use crate::testing::repositories::mock_database::MockTransaction;
+    use crate::testing::repositories::mock_user_repository::MockUserRepository;
 
     #[tokio::test]
     async fn mock_repo_create_user_returns_fixed_values() {

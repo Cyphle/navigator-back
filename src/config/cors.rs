@@ -12,7 +12,7 @@ pub struct CorsConfig {
 }
 
 pub fn actix_cors_config(cors_config: &CorsConfig) -> Cors {
-    Cors::default()
+    let mut cors = Cors::default()
         .allowed_origin(cors_config.allowed_origin.as_str())
         .allowed_methods(
             cors_config
@@ -31,6 +31,20 @@ pub fn actix_cors_config(cors_config: &CorsConfig) -> Cors {
                 })
                 .collect::<Vec<_>>(),
         )
-        .supports_credentials() // Optional, if credentials are used
-        .max_age(3600)
+        .max_age(Some(cors_config.max_age as usize));
+
+    if cors_config.supports_credentials {
+        cors = cors.supports_credentials();
+    }
+
+    if let Some(additional_headers) = &cors_config.additional_headers {
+        for header in additional_headers.split(',') {
+            let header = header.trim();
+            if !header.is_empty() {
+                cors = cors.allowed_header(header);
+            }
+        }
+    }
+
+    cors
 }

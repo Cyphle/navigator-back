@@ -1,7 +1,7 @@
 use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
 use actix_web::web::Data;
-use log::{debug, error, info};
+use log::{error, info};
 use openid::{Bearer, Client, Discovered, StandardClaims};
 use url::Url;
 use crate::config::actix::ActixState;

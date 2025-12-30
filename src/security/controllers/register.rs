@@ -2,14 +2,11 @@ use crate::config::actix::ActixState;
 use crate::security::token::get_admin_access_token;
 use actix_session::Session;
 use actix_web::web::Data;
-use actix_web::{get, post, web, HttpResponse, Responder};
+use actix_web::{post, web, HttpResponse, Responder};
 use log::{error, info};
-use openid::{Client, Discovered, StandardClaims};
 use reqwest::Client as HttpClient;
-use serde::{Deserialize, Serialize};
-use std::error::Error;
+use serde::Serialize;
 use crate::domain::user::user::User;
-use crate::repositories;
 use crate::repositories::user::UserRepository;
 use crate::security::controllers::auth_request::AuthRequest;
 
@@ -29,6 +26,7 @@ struct KeycloakCredential {
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 pub struct RegisterRequest {
     pub username: String,
     pub email: String,

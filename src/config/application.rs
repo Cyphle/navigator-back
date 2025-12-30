@@ -37,12 +37,21 @@ impl AppConfig {
     }
 
     pub fn get_session_store_url(&self) -> String {
+        let base_url = if self.session.store_addr.is_empty() {
+            format!(
+                "redis://{}:{}@{}:{}",
+                self.session.database.username,
+                self.session.database.password,
+                self.session.database.host,
+                self.session.database.port
+            )
+        } else {
+            self.session.store_addr.clone()
+        };
         format!(
-            "redis://{}:{}@{}:{}",
-            self.session.database.username,
-            self.session.database.password,
-            self.session.database.host,
-            self.session.database.port
+            "{}/{}",
+            base_url.trim_end_matches('/'),
+            self.session.database.db
         )
     }
 

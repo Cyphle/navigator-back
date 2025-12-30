@@ -1,6 +1,6 @@
 use std::time::Duration;
 use serde::Deserialize;
-use sqlx::{Error, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -11,6 +11,7 @@ pub struct DatabaseConfig {
     pub username: String,
     pub password: String,
     pub max_connections: u32,
+    #[allow(dead_code)]
     pub connect_timeout: u64,
     pub acquire_timeout: u64,
     pub idle_timeout: u64,

@@ -15,19 +15,11 @@ use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
 use crate::security::controllers::register::register;
 use crate::security::oidc::get_client;
-use actix_cors::Cors;
-use actix_session::config::PersistentSession;
 use actix_session::storage::RedisSessionStore;
-use actix_session::SessionMiddleware;
-use actix_web::cookie::{time, Key};
-use actix_web::http::StatusCode;
-use actix_web::web::Json;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::cookie::Key;
+use actix_web::{web, App, HttpServer};
 use log::info;
-use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use crate::config::application::AppConfig;
 use crate::config::cors::actix_cors_config;
 use crate::config::session::actix_session_config;
 use crate::repositories::family::SqlxFamilyRepository;
@@ -107,4 +99,3 @@ async fn main() -> std::io::Result<()> {
         }
     }
 }
-

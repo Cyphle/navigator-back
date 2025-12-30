@@ -17,6 +17,7 @@ pub struct OidcClientConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct OidcConfig {
     pub url: String,
+    #[allow(dead_code)]
     pub realm_name: String,
     pub redirect_uri: String,
     pub logout_uri: String,

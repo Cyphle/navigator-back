@@ -29,7 +29,7 @@ pub fn actix_session_config(config: &AppConfig, session_key: Key, session_store:
     )
         .session_lifecycle(
             PersistentSession::default()
-                .session_ttl(time::Duration::days(5)),
+                .session_ttl(time::Duration::days(config.session.session_ttl_days as i64)),
         )
         .cookie_secure(false)
         .cookie_name(config.get_cookie_name())

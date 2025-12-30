@@ -53,7 +53,9 @@ pub async fn get_username_from_session(
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
+    #[allow(dead_code)]
     token_type: String,
+    #[allow(dead_code)]
     expires_in: u64,
 }
 

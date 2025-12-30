@@ -3,11 +3,13 @@ use sqlx::{Error, FromRow, Postgres, Transaction};
 
 #[derive(Debug, FromRow, Clone)]
 pub struct FamilyEntity {
+    #[allow(dead_code)]
     pub id: i32,
     pub name: String,
 }
 
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 pub struct FamilyMember {
     id: i32,
     family_id: i32,

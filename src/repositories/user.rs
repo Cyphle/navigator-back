@@ -97,6 +97,7 @@ mod tests {
         let repo = MockUserRepository {
             fixed_id: 42,
             fixed_username: "alice".to_string(),
+            should_error: false,
         };
         let mut tx = MockTransaction;
         let user = User {
@@ -113,6 +114,7 @@ mod tests {
         let repo = MockUserRepository {
             fixed_id: 7,
             fixed_username: "bob".to_string(),
+            should_error: false,
         };
         let mut tx = MockTransaction;
 
@@ -126,6 +128,7 @@ mod tests {
         let repo = MockUserRepository {
             fixed_id: 9,
             fixed_username: "carol".to_string(),
+            should_error: false,
         };
         let mut tx = MockTransaction;
         let user = User {

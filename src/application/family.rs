@@ -51,97 +51,22 @@ where
 #[cfg(test)]
 mod tests {
     use super::{get_families_from_username, ApplicationErrors};
-    use crate::config::actix::{ActixState, DbConnection};
-    use crate::domain::user::user::User;
-    use crate::repositories::family::{FamilyEntity, FamilyRepository};
-    use crate::repositories::user::UserRepository;
+    use crate::config::actix::ActixState;
+    use crate::repositories::family::FamilyEntity;
+    use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
+    use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
+    use crate::testing::repositories::mock_user_repository::MockUserRepository;
+    use crate::testing::security::oidc::dummy_oidc_config;
     use actix_web::web;
-    use async_trait::async_trait;
-    use std::future::Future;
-    use std::pin::Pin;
     use std::sync::Arc;
 
-    struct MockTransaction;
-
-    struct MockDbOk;
-
-    impl DbConnection for MockDbOk {
-        type Tx<'a> = MockTransaction;
-
-        fn begin<'a>(
-            &'a self,
-        ) -> Pin<Box<dyn Future<Output = Result<Self::Tx<'a>, sqlx::Error>> + Send + 'a>> {
-            Box::pin(async { Ok(MockTransaction) })
-        }
-    }
-
-    struct MockDbErr;
-
-    impl DbConnection for MockDbErr {
-        type Tx<'a> = MockTransaction;
-
-        fn begin<'a>(
-            &'a self,
-        ) -> Pin<Box<dyn Future<Output = Result<Self::Tx<'a>, sqlx::Error>> + Send + 'a>> {
-            Box::pin(async { Err(sqlx::Error::RowNotFound) })
-        }
-    }
-
-    struct MockUserRepository;
-
-    #[async_trait]
-    impl UserRepository<MockTransaction> for MockUserRepository {
-        async fn create_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _user: &User,
-        ) -> Result<(u64, actix_web::http::StatusCode), sqlx::Error> {
-            Err(sqlx::Error::RowNotFound)
-        }
-
-        async fn get_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _username: &str,
-        ) -> Result<crate::repositories::user::UserEntity, sqlx::Error> {
-            Err(sqlx::Error::RowNotFound)
-        }
-
-        async fn get_or_create_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _user: &User,
-        ) -> Result<crate::repositories::user::UserEntity, sqlx::Error> {
-            Err(sqlx::Error::RowNotFound)
-        }
-    }
-
-    struct MockFamilyRepository {
-        families: Vec<FamilyEntity>,
-        should_error: bool,
-    }
-
-    #[async_trait]
-    impl FamilyRepository<MockTransaction> for MockFamilyRepository {
-        async fn get_family_by_member_username(
-            &self,
-            _tx: &mut MockTransaction,
-            _username: &str,
-        ) -> Result<Vec<FamilyEntity>, sqlx::Error> {
-            if self.should_error {
-                Err(sqlx::Error::RowNotFound)
-            } else {
-                Ok(self.families.clone())
-            }
-        }
-    }
-
-    fn make_state_ok() -> web::Data<ActixState<MockDbOk, MockUserRepository, MockFamilyRepository>> {
+    fn make_state_ok(
+    ) -> web::Data<ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>> {
         web::Data::new(ActixState {
-            db_connection: MockDbOk,
-            oidc_config: crate::testing::security::oidc::dummy_oidc_config(),
+            db_connection: MockPoolPostgres,
+            oidc_config: dummy_oidc_config(),
             oidc_client: None,
-            user_repository: Arc::new(MockUserRepository),
+            user_repository: Arc::new(MockUserRepository::default()),
             family_repository: Arc::new(MockFamilyRepository {
                 families: vec![
                     FamilyEntity {
@@ -158,12 +83,13 @@ mod tests {
         })
     }
 
-    fn make_state_db_error() -> web::Data<ActixState<MockDbErr, MockUserRepository, MockFamilyRepository>> {
+    fn make_state_db_error(
+    ) -> web::Data<ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>> {
         web::Data::new(ActixState {
-            db_connection: MockDbErr,
-            oidc_config: crate::testing::security::oidc::dummy_oidc_config(),
+            db_connection: MockPoolPostgresError,
+            oidc_config: dummy_oidc_config(),
             oidc_client: None,
-            user_repository: Arc::new(MockUserRepository),
+            user_repository: Arc::new(MockUserRepository::default()),
             family_repository: Arc::new(MockFamilyRepository {
                 families: Vec::new(),
                 should_error: false,
@@ -171,12 +97,13 @@ mod tests {
         })
     }
 
-    fn make_state_repo_error() -> web::Data<ActixState<MockDbOk, MockUserRepository, MockFamilyRepository>> {
+    fn make_state_repo_error(
+    ) -> web::Data<ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>> {
         web::Data::new(ActixState {
-            db_connection: MockDbOk,
-            oidc_config: crate::testing::security::oidc::dummy_oidc_config(),
+            db_connection: MockPoolPostgres,
+            oidc_config: dummy_oidc_config(),
             oidc_client: None,
-            user_repository: Arc::new(MockUserRepository),
+            user_repository: Arc::new(MockUserRepository::default()),
             family_repository: Arc::new(MockFamilyRepository {
                 families: Vec::new(),
                 should_error: true,

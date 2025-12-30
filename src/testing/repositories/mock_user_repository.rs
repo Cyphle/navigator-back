@@ -8,6 +8,7 @@ use crate::testing::repositories::mock_database::MockTransaction;
 pub struct MockUserRepository {
     pub fixed_id: u64,
     pub fixed_username: String,
+    pub should_error: bool,
 }
 
 impl Default for MockUserRepository {
@@ -15,6 +16,7 @@ impl Default for MockUserRepository {
         Self {
             fixed_id: 1,
             fixed_username: "mock_user".to_string(),
+            should_error: false,
         }
     }
 }
@@ -39,7 +41,11 @@ impl UserRepository<MockTransaction> for MockUserRepository {
         _tx: &mut MockTransaction,
         _user: &User,
     ) -> Result<(u64, StatusCode), sqlx::Error> {
-        Ok(self.fixed_create_response())
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.fixed_create_response())
+        }
     }
 
     async fn get_user(
@@ -47,7 +53,11 @@ impl UserRepository<MockTransaction> for MockUserRepository {
         _tx: &mut MockTransaction,
         _username: &str,
     ) -> Result<UserEntity, sqlx::Error> {
-        Ok(self.fixed_entity())
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.fixed_entity())
+        }
     }
 
     async fn get_or_create_user(
@@ -55,7 +65,11 @@ impl UserRepository<MockTransaction> for MockUserRepository {
         _tx: &mut MockTransaction,
         _user: &User,
     ) -> Result<UserEntity, sqlx::Error> {
-        Ok(self.fixed_entity())
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.fixed_entity())
+        }
     }
 }
 
@@ -66,7 +80,11 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for MockUserRepository {
         _tx: &mut Transaction<'a, Postgres>,
         _user: &User,
     ) -> Result<(u64, StatusCode), sqlx::Error> {
-        Ok(self.fixed_create_response())
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.fixed_create_response())
+        }
     }
 
     async fn get_user(
@@ -74,7 +92,11 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for MockUserRepository {
         _tx: &mut Transaction<'a, Postgres>,
         _username: &str,
     ) -> Result<UserEntity, sqlx::Error> {
-        Ok(self.fixed_entity())
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.fixed_entity())
+        }
     }
 
     async fn get_or_create_user(
@@ -82,6 +104,10 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for MockUserRepository {
         _tx: &mut Transaction<'a, Postgres>,
         _user: &User,
     ) -> Result<UserEntity, sqlx::Error> {
-        Ok(self.fixed_entity())
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.fixed_entity())
+        }
     }
 }

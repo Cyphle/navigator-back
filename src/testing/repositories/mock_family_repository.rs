@@ -4,6 +4,7 @@ use crate::testing::repositories::mock_database::MockTransaction;
 
 pub struct MockFamilyRepository {
     pub families: Vec<FamilyEntity>,
+    pub should_error: bool,
 }
 
 #[async_trait]
@@ -13,6 +14,10 @@ impl FamilyRepository<MockTransaction> for MockFamilyRepository {
         _tx: &mut MockTransaction,
         _username: &str,
     ) -> Result<Vec<FamilyEntity>, sqlx::Error> {
-        Ok(self.families.clone())
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.families.clone())
+        }
     }
 }

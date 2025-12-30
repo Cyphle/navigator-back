@@ -20,6 +20,7 @@ pub fn mock_actix_state(
         user_repository: Arc::new(MockUserRepository::default()),
         family_repository: Arc::new(MockFamilyRepository {
             families,
+            should_error: false,
         }),
     })
 }

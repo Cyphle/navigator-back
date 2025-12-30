@@ -1,29 +1,24 @@
 use std::error::Error;
 use std::fmt;
 use actix_web::web;
+use crate::application::errors::ApplicationErrors;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::{FamilyEntity, FamilyRepository};
 use crate::repositories::user::UserRepository;
 
-#[derive(Debug)]
-pub enum FamilyServiceError {
-    MissingUsername,
-    Database(sqlx::Error),
-}
-
-impl fmt::Display for FamilyServiceError {
+impl fmt::Display for ApplicationErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FamilyServiceError::MissingUsername => write!(f, "No username provided"),
-            FamilyServiceError::Database(err) => write!(f, "Database error: {}", err),
+            ApplicationErrors::MissingUsername => write!(f, "No username provided"),
+            ApplicationErrors::Database(err) => write!(f, "Database error: {}", err),
         }
     }
 }
 
-impl Error for FamilyServiceError {
+impl Error for ApplicationErrors {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            FamilyServiceError::Database(err) => Some(err),
+            ApplicationErrors::Database(err) => Some(err),
             _ => None,
         }
     }
@@ -32,30 +27,30 @@ impl Error for FamilyServiceError {
 pub async fn get_families_from_username<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
     username: Option<String>,
-) -> Result<Vec<FamilyEntity>, FamilyServiceError>
+) -> Result<Vec<FamilyEntity>, ApplicationErrors>
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
-    let username = username.ok_or(FamilyServiceError::MissingUsername)?;
+    let username = username.ok_or(ApplicationErrors::MissingUsername)?;
 
     let mut tx = state
         .db_connection
         .begin()
         .await
-        .map_err(FamilyServiceError::Database)?;
+        .map_err(ApplicationErrors::Database)?;
 
     state
         .family_repository
         .get_family_by_member_username(&mut tx, &username)
         .await
-        .map_err(FamilyServiceError::Database)
+        .map_err(ApplicationErrors::Database)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{get_families_from_username, FamilyServiceError};
+    use super::{get_families_from_username, ApplicationErrors};
     use crate::config::actix::{ActixState, DbConnection};
     use crate::domain::user::user::User;
     use crate::repositories::family::{FamilyEntity, FamilyRepository};
@@ -194,7 +189,7 @@ mod tests {
         let state = make_state_ok();
         let result = get_families_from_username(state, None).await;
 
-        assert!(matches!(result, Err(FamilyServiceError::MissingUsername)));
+        assert!(matches!(result, Err(ApplicationErrors::MissingUsername)));
     }
 
     #[actix_web::test]
@@ -204,7 +199,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(FamilyServiceError::Database(sqlx::Error::RowNotFound))
+            Err(ApplicationErrors::Database(sqlx::Error::RowNotFound))
         ));
     }
 
@@ -215,7 +210,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(FamilyServiceError::Database(sqlx::Error::RowNotFound))
+            Err(ApplicationErrors::Database(sqlx::Error::RowNotFound))
         ));
     }
 

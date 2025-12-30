@@ -1,4 +1,4 @@
-use crate::application::family::{get_families_from_username, FamilyServiceError};
+use crate::application::family::{get_families_from_username};
 use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::FamilyRepository;
 use crate::repositories::user::UserRepository;
@@ -7,6 +7,7 @@ use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
 use serde::Serialize;
+use crate::application::errors::ApplicationErrors;
 
 #[derive(Serialize)]
 struct FamilyView {
@@ -41,8 +42,8 @@ where
                 .collect::<Vec<_>>();
             HttpResponse::Ok().json(views)
         }
-        Err(FamilyServiceError::MissingUsername) => HttpResponse::Unauthorized().finish(),
-        Err(FamilyServiceError::Database(e)) => {
+        Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
+        Err(ApplicationErrors::Database(e)) => {
             error!("Error getting families: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }

@@ -53,41 +53,26 @@ where
 mod tests {
     use crate::config::actix::ActixState;
     use crate::repositories::family::FamilyEntity;
+    use crate::testing::actix::mock_state::mock_actix_state;
     use crate::testing::repositories::mock_database::MockPoolPostgres;
     use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
     use crate::testing::repositories::mock_user_repository::MockUserRepository;
-    use crate::testing::security::oidc::dummy_oidc_config;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App};
     use spy::{spy, Spy};
-    use std::sync::Arc;
-
-    // TODO à mettre dans testing et une fonction qui peut recevoir des mock state ou alors un truc compasable par repository
-    fn make_state(
-    ) -> web::Data<ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>> {
-        web::Data::new(ActixState {
-            db_connection: MockPoolPostgres,
-            oidc_config: dummy_oidc_config(),
-            oidc_client: None,
-            user_repository: Arc::new(MockUserRepository),
-            family_repository: Arc::new(MockFamilyRepository {
-                families: vec![
-                    FamilyEntity {
-                        id: 1,
-                        name: "Family A".to_string(),
-                    },
-                    FamilyEntity {
-                        id: 2,
-                        name: "Family B".to_string(),
-                    },
-                ],
-            }),
-        })
-    }
 
     #[actix_web::test]
     async fn should_return_unauthorized_without_session() {
-        let state = make_state();
+        let state = mock_actix_state(vec![
+            FamilyEntity {
+                id: 1,
+                name: "Family A".to_string(),
+            },
+            FamilyEntity {
+                id: 2,
+                name: "Family B".to_string(),
+            },
+        ]);
         let (spy_handler, spy) = spy!();
         let app = test::init_service(
             App::new()

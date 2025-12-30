@@ -1,12 +1,12 @@
-use actix_session::Session;
-use actix_web::{web, HttpResponse, Responder};
-use log::{debug, error};
-use serde::Serialize;
 use crate::application::family::{get_families_from_username, FamilyServiceError};
 use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::FamilyRepository;
 use crate::repositories::user::UserRepository;
 use crate::security::token::get_username_from_session;
+use actix_session::Session;
+use actix_web::{web, HttpResponse, Responder};
+use log::{debug, error};
+use serde::Serialize;
 
 #[derive(Serialize)]
 struct FamilyView {
@@ -51,67 +51,16 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::config::actix::{ActixState, DbConnection};
-    use crate::domain::user::user::User;
-    use crate::repositories::family::{FamilyEntity, FamilyRepository};
-    use crate::repositories::user::UserRepository;
+    use crate::config::actix::ActixState;
+    use crate::repositories::family::FamilyEntity;
+    use crate::testing::repositories::mock_database::MockPoolPostgres;
+    use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
+    use crate::testing::repositories::mock_user_repository::MockUserRepository;
     use crate::testing::security::oidc::dummy_oidc_config;
     use actix_web::http::StatusCode;
-    use actix_web::{test, web, App, HttpResponse};
-    use async_trait::async_trait;
+    use actix_web::{test, web, App};
     use spy::{spy, Spy};
-    use std::future::Future;
-    use std::pin::Pin;
     use std::sync::Arc;
-    use crate::testing::repositories::database::{MockPoolPostgres, MockTransaction};
-
-    // TODO à mettre dans testing
-    struct MockUserRepository;
-
-    // TODO à mettre dans testing
-    #[async_trait]
-    impl UserRepository<MockTransaction> for MockUserRepository {
-        async fn create_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _user: &User,
-        ) -> Result<(u64, actix_web::http::StatusCode), sqlx::Error> {
-            Err(sqlx::Error::RowNotFound)
-        }
-
-        async fn get_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _username: &str,
-        ) -> Result<crate::repositories::user::UserEntity, sqlx::Error> {
-            Err(sqlx::Error::RowNotFound)
-        }
-
-        async fn get_or_create_user(
-            &self,
-            _tx: &mut MockTransaction,
-            _user: &User,
-        ) -> Result<crate::repositories::user::UserEntity, sqlx::Error> {
-            Err(sqlx::Error::RowNotFound)
-        }
-    }
-
-    // TODO à mettre dans testing
-    struct MockFamilyRepository {
-        families: Vec<FamilyEntity>,
-    }
-
-    // TODO à mettre dans testing
-    #[async_trait]
-    impl FamilyRepository<MockTransaction> for MockFamilyRepository {
-        async fn get_family_by_member_username(
-            &self,
-            _tx: &mut MockTransaction,
-            _username: &str,
-        ) -> Result<Vec<FamilyEntity>, sqlx::Error> {
-            Ok(self.families.clone())
-        }
-    }
 
     // TODO à mettre dans testing et une fonction qui peut recevoir des mock state ou alors un truc compasable par repository
     fn make_state(

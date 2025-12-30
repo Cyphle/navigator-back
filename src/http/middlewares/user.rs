@@ -56,10 +56,10 @@ mod tests {
 
     #[actix_web::test]
     async fn should_return_unauthorized_without_session() {
-        let state = mock_actix_state(vec![FamilyEntity {
+        let state = mock_actix_state(Some(vec![FamilyEntity {
             id: 1,
             name: "Family A".to_string(),
-        }]);
+        }]));
         let app = test::init_service(
             App::new().app_data(state.clone()).route(
                 "/users/me",

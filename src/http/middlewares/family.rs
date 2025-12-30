@@ -60,7 +60,7 @@ mod tests {
 
     #[actix_web::test]
     async fn should_return_unauthorized_without_session() {
-        let state = mock_actix_state(vec![
+        let state = mock_actix_state(Some(vec![
             FamilyEntity {
                 id: 1,
                 name: "Family A".to_string(),
@@ -69,7 +69,7 @@ mod tests {
                 id: 2,
                 name: "Family B".to_string(),
             },
-        ]);
+        ]));
         let (spy_handler, spy) = spy!();
         let app = test::init_service(
             App::new()

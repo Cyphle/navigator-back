@@ -1,52 +1,41 @@
 use std::sync::Arc;
 use actix_web::web;
-use crate::config::actix::ActixState;
+use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::FamilyEntity;
-use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
+use crate::testing::repositories::mock_database::MockPoolPostgres;
 use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
 use crate::testing::repositories::mock_user_repository::MockUserRepository;
 use crate::testing::security::oidc::dummy_oidc_config;
 
 pub type MockActixState = ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>;
-pub type MockActixStateDbError =
-    ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>;
 
 #[derive(Default)]
 pub struct MockStateConfig {
-    pub families: Vec<FamilyEntity>,
+    pub families: Option<Vec<FamilyEntity>>,
     pub user_should_error: bool,
     pub family_should_error: bool,
 }
 
-pub fn mock_actix_state(families: Vec<FamilyEntity>) -> web::Data<MockActixState> {
-    mock_actix_state_with(MockStateConfig {
-        families,
-        ..MockStateConfig::default()
-    })
+pub fn mock_actix_state(families: Option<Vec<FamilyEntity>>) -> web::Data<MockActixState> {
+    mock_actix_state_with(
+        MockPoolPostgres,
+        MockStateConfig {
+            families,
+            ..MockStateConfig::default()
+        },
+    )
 }
 
-pub fn mock_actix_state_with(config: MockStateConfig) -> web::Data<MockActixState> {
-    web::Data::new(ActixState {
-        db_connection: MockPoolPostgres,
-        oidc_config: dummy_oidc_config(),
-        oidc_client: None,
-        user_repository: Arc::new(MockUserRepository {
-            fixed_id: 1,
-            fixed_username: "mock_user".to_string(),
-            should_error: config.user_should_error,
-        }),
-        family_repository: Arc::new(MockFamilyRepository {
-            families: config.families,
-            should_error: config.family_should_error,
-        }),
-    })
-}
-
-pub fn mock_actix_state_db_error(
+pub fn mock_actix_state_with<DB>(
+    db_connection: DB,
     config: MockStateConfig,
-) -> web::Data<MockActixStateDbError> {
+) -> web::Data<ActixState<DB, MockUserRepository, MockFamilyRepository>>
+where
+    for<'a> DB: DbConnection<Tx<'a> = crate::testing::repositories::mock_database::MockTransaction>
+        + 'static,
+{
     web::Data::new(ActixState {
-        db_connection: MockPoolPostgresError,
+        db_connection,
         oidc_config: dummy_oidc_config(),
         oidc_client: None,
         user_repository: Arc::new(MockUserRepository {
@@ -55,7 +44,7 @@ pub fn mock_actix_state_db_error(
             should_error: config.user_should_error,
         }),
         family_repository: Arc::new(MockFamilyRepository {
-            families: config.families,
+            families: config.families.unwrap_or_default(),
             should_error: config.family_should_error,
         }),
     })

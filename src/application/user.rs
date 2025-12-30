@@ -36,34 +36,46 @@ mod tests {
     use crate::application::errors::ApplicationErrors;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{
-        mock_actix_state_db_error, mock_actix_state_with, MockActixState,
-        MockActixStateDbError, MockStateConfig,
+        mock_actix_state_with, MockActixState, MockStateConfig,
     };
+    use crate::config::actix::ActixState;
+    use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
+    use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
+    use crate::testing::repositories::mock_user_repository::MockUserRepository;
     use actix_web::web;
 
     fn make_state_ok() -> web::Data<MockActixState> {
-        mock_actix_state_with(MockStateConfig {
-            families: vec![FamilyEntity {
-                id: 1,
-                name: "Family A".to_string(),
-            }],
-            ..MockStateConfig::default()
-        })
+        mock_actix_state_with(
+            MockPoolPostgres,
+            MockStateConfig {
+                families: Some(vec![FamilyEntity {
+                    id: 1,
+                    name: "Family A".to_string(),
+                }]),
+                ..MockStateConfig::default()
+            },
+        )
     }
 
-    fn make_state_db_error() -> web::Data<MockActixStateDbError> {
-        mock_actix_state_db_error(MockStateConfig {
-            families: vec![],
-            ..MockStateConfig::default()
-        })
+    fn make_state_db_error() -> web::Data<ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>> {
+        mock_actix_state_with(
+            MockPoolPostgresError,
+            MockStateConfig {
+                families: Some(vec![]),
+                ..MockStateConfig::default()
+            },
+        )
     }
 
     fn make_state_repo_error() -> web::Data<MockActixState> {
-        mock_actix_state_with(MockStateConfig {
-            families: vec![],
-            user_should_error: true,
-            ..MockStateConfig::default()
-        })
+        mock_actix_state_with(
+            MockPoolPostgres,
+            MockStateConfig {
+                families: Some(vec![]),
+                user_should_error: true,
+                ..MockStateConfig::default()
+            },
+        )
     }
 
     #[actix_web::test]

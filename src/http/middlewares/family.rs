@@ -53,23 +53,30 @@ where
 #[cfg(test)]
 mod tests {
     use crate::repositories::family::FamilyEntity;
-    use crate::testing::actix::mock_state::{mock_actix_state, MockActixState};
+    use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App};
     use spy::{spy, Spy};
+    use crate::testing::repositories::mock_database::MockPoolPostgres;
 
     #[actix_web::test]
     async fn should_return_unauthorized_without_session() {
-        let state = mock_actix_state(Some(vec![
-            FamilyEntity {
-                id: 1,
-                name: "Family A".to_string(),
-            },
-            FamilyEntity {
-                id: 2,
-                name: "Family B".to_string(),
-            },
-        ]));
+        let state = mock_actix_state(
+            MockPoolPostgres,
+            MockStateConfig {
+                families: Some(vec![
+                    FamilyEntity {
+                        id: 1,
+                        name: "Family A".to_string(),
+                    },
+                    FamilyEntity {
+                        id: 2,
+                        name: "Family B".to_string(),
+                    },
+                ]),
+                ..MockStateConfig::default()
+            }
+        );
         let (spy_handler, spy) = spy!();
         let app = test::init_service(
             App::new()

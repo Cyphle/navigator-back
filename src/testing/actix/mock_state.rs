@@ -16,17 +16,7 @@ pub struct MockStateConfig {
     pub family_should_error: bool,
 }
 
-pub fn mock_actix_state(families: Option<Vec<FamilyEntity>>) -> web::Data<MockActixState> {
-    mock_actix_state_with(
-        MockPoolPostgres,
-        MockStateConfig {
-            families,
-            ..MockStateConfig::default()
-        },
-    )
-}
-
-pub fn mock_actix_state_with<DB>(
+pub fn mock_actix_state<DB>(
     db_connection: DB,
     config: MockStateConfig,
 ) -> web::Data<ActixState<DB, MockUserRepository, MockFamilyRepository>>

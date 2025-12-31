@@ -50,16 +50,23 @@ where
 mod tests {
     use super::users_me_middleware;
     use crate::repositories::family::FamilyEntity;
-    use crate::testing::actix::mock_state::{mock_actix_state, MockActixState};
+    use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
+    use crate::testing::repositories::mock_database::MockPoolPostgres;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App};
 
     #[actix_web::test]
     async fn should_return_unauthorized_without_session() {
-        let state = mock_actix_state(Some(vec![FamilyEntity {
-            id: 1,
-            name: "Family A".to_string(),
-        }]));
+        let state = mock_actix_state(
+            MockPoolPostgres,
+            MockStateConfig {
+                families: Some(vec![FamilyEntity {
+                    id: 1,
+                    name: "Family A".to_string(),
+                }]),
+                ..MockStateConfig::default()
+            }
+        );
         let app = test::init_service(
             App::new().app_data(state.clone()).route(
                 "/users/me",

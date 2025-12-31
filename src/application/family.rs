@@ -53,7 +53,7 @@ mod tests {
     use super::{get_families_from_username, ApplicationErrors};
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{
-        mock_actix_state_with, MockActixState, MockStateConfig,
+        mock_actix_state, MockActixState, MockStateConfig,
     };
     use crate::config::actix::ActixState;
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
@@ -62,7 +62,7 @@ mod tests {
     use actix_web::web;
 
     fn make_state_ok() -> web::Data<MockActixState> {
-        mock_actix_state_with(
+        mock_actix_state(
             MockPoolPostgres,
             MockStateConfig {
                 families: Some(vec![
@@ -81,11 +81,11 @@ mod tests {
     }
 
     fn make_state_db_error() -> web::Data<ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>> {
-        mock_actix_state_with(MockPoolPostgresError, MockStateConfig::default())
+        mock_actix_state(MockPoolPostgresError, MockStateConfig::default())
     }
 
     fn make_state_repo_error() -> web::Data<MockActixState> {
-        mock_actix_state_with(
+        mock_actix_state(
             MockPoolPostgres,
             MockStateConfig {
                 family_should_error: true,

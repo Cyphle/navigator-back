@@ -1,4 +1,4 @@
 pub mod user;
 
 pub mod technical;
-mod family;
+pub mod family;

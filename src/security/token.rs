@@ -1,3 +1,5 @@
+use actix_session::Session;
+use actix_web::web;
 use crate::security::oidc::OidcAdminConfig;
 use log::{error, info, warn};
 use openid::{
@@ -6,7 +8,10 @@ use openid::{
 };
 use reqwest::Client as HttpClient;
 use serde::Deserialize;
+use crate::config::actix::{ActixState, DbConnection};
 use crate::config::application::USER_SESSION_KEY;
+use crate::repositories::family::FamilyRepository;
+use crate::repositories::user::UserRepository;
 
 // To get the username from a Bearer token
 pub async fn get_username_from_bearer(
@@ -46,6 +51,23 @@ pub async fn get_username_from_session(
             error!("Error getting bearer token from session: {}", e);
             None
         }
+    }
+}
+
+// To get the connect username from session
+pub async fn get_connected_username<DB, U, F>(session: &Session, state: &web::Data<ActixState<DB, U, F>>) -> Option<String>
+where
+    DB: DbConnection,
+    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
+    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
+{
+    let oidc_client = state.oidc_client.clone();
+    match oidc_client {
+        Some(client) => {
+            let client = client.lock().unwrap();
+            get_username_from_session(&client, &session).await
+        }
+        None => None,
     }
 }
 

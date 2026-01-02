@@ -23,7 +23,7 @@ where
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
-    debug!("Calling users me");
+    debug!("[Middleware] users me");
 
     let oidc_client = state.oidc_client.clone();
     let username = match oidc_client {

@@ -1,7 +1,7 @@
 use crate::application::errors::ApplicationErrors;
-use crate::application::family::get_families_from_username;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::http::requests::family::CreateFamilyRequest;
+use crate::repositories::family::FamilyEntity;
 use crate::repositories::family::FamilyRepository;
 use crate::repositories::user::UserRepository;
 use crate::security::token::{get_connected_username, get_username_from_session};
@@ -9,26 +9,30 @@ use actix_session::Session;
 use actix_web::{HttpResponse, Responder, web};
 use log::{debug, error};
 use serde::Serialize;
+use std::future::Future;
 
 #[derive(Serialize)]
 struct FamilyView {
     name: String,
 }
 
-pub async fn get_families_middleware<DB, U, F>(
+pub async fn get_families_middleware<DB, U, F, GetFamilies, Fut>(
     session: Session,
     state: web::Data<ActixState<DB, U, F>>,
+    get_families: GetFamilies,
 ) -> impl Responder
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
+    GetFamilies: Fn(web::Data<ActixState<DB, U, F>>, Option<String>) -> Fut,
+    Fut: Future<Output = Result<Vec<FamilyEntity>, ApplicationErrors>>,
 {
     debug!("[Middleware] Getting families");
 
     let username = get_connected_username(&session, &state).await;
 
-    match get_families_from_username(state, username).await {
+    match get_families(state, username).await {
         Ok(families) => {
             let views = families
                 .into_iter()
@@ -70,12 +74,14 @@ where
 #[cfg(test)]
 mod tests {
     use crate::http::requests::family::CreateFamilyRequest;
+    use crate::application::family::get_families_from_username;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{MockActixState, MockStateConfig, mock_actix_state};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
     use actix_web::http::StatusCode;
     use actix_web::{App, test, web};
     use spy::{Spy, spy};
+    use std::sync::Arc;
 
     #[actix_web::test]
     async fn should_call_get_families_application_layer() {
@@ -96,12 +102,19 @@ mod tests {
             },
         );
         let (spy_handler, spy) = spy!();
+        let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
         let app = test::init_service(App::new().app_data(state.clone()).route(
             "/families",
             web::get().to(
-                move |session: actix_session::Session, state: web::Data<MockActixState>| {
-                    spy_handler();
-                    super::get_families_middleware(session, state)
+                {
+                    let spy_handler = Arc::clone(&spy_handler);
+                    move |session: actix_session::Session, state: web::Data<MockActixState>| {
+                        let spy_handler = Arc::clone(&spy_handler);
+                        super::get_families_middleware(session, state, move |state, username| {
+                            (spy_handler)();
+                            get_families_from_username(state, username)
+                        })
+                    }
                 },
             ),
         ))
@@ -111,6 +124,7 @@ mod tests {
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         drop(app);
+        drop(spy_handler);
         let snapshot = spy.snapshot();
         assert_eq!(snapshot.num_of_calls(), 1);
     }

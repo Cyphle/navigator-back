@@ -25,21 +25,30 @@ where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
-    GetFamilies: Fn(web::Data<ActixState<DB, U, F>>, Option<String>) -> Fut,
+    GetFamilies: Fn(web::Data<ActixState<DB, U, F>>, String) -> Fut,
     Fut: Future<Output = Result<Vec<FamilyEntity>, ApplicationErrors>>,
 {
     debug!("[Middleware] Getting families");
 
-    let username = get_connected_username(&session, &state).await;
+    let username = get_connected_username(&session, &state)
+        .await
+        .ok_or(ApplicationErrors::MissingUsername);
 
-    match get_families(state, username).await {
-        Ok(families) => {
-            let views = families
-                .into_iter()
-                .map(|family| FamilyView { name: family.name })
-                .collect::<Vec<_>>();
-            HttpResponse::Ok().json(views)
-        }
+    match username {
+        Ok(username) => match get_families(state, username).await {
+            Ok(families) => {
+                let views = families
+                    .into_iter()
+                    .map(|family| FamilyView { name: family.name })
+                    .collect::<Vec<_>>();
+                HttpResponse::Ok().json(views)
+            }
+            Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
+            Err(ApplicationErrors::Database(e)) => {
+                error!("Error getting families: {:?}", e);
+                HttpResponse::InternalServerError().finish()
+            }
+        },
         Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
         Err(ApplicationErrors::Database(e)) => {
             error!("Error getting families: {:?}", e);
@@ -73,8 +82,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::application::family::get_families;
     use crate::http::requests::family::CreateFamilyRequest;
-    use crate::application::family::get_families_from_username;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{MockActixState, MockStateConfig, mock_actix_state};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
@@ -85,6 +94,7 @@ mod tests {
 
     #[actix_web::test]
     async fn should_call_get_families_application_layer() {
+        // Given
         let state = mock_actix_state(
             MockPoolPostgres,
             MockStateConfig {
@@ -103,26 +113,33 @@ mod tests {
         );
         let (spy_handler, spy) = spy!();
         let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
+
+        // When
         let app = test::init_service(App::new().app_data(state.clone()).route(
             "/families",
-            web::get().to(
-                {
+            web::get().to({
+                let spy_handler = Arc::clone(&spy_handler);
+                move |session: actix_session::Session, state: web::Data<MockActixState>| {
                     let spy_handler = Arc::clone(&spy_handler);
-                    move |session: actix_session::Session, state: web::Data<MockActixState>| {
-                        let spy_handler = Arc::clone(&spy_handler);
+                    async move {
+                        session
+                            .insert("test_username", "mock_user")
+                            .expect("failed to set test username in session");
                         super::get_families_middleware(session, state, move |state, username| {
                             (spy_handler)();
-                            get_families_from_username(state, username)
+                            get_families(state, username)
                         })
+                        .await
                     }
-                },
-            ),
+                }
+            }),
         ))
         .await;
-
         let req = test::TestRequest::get().uri("/families").to_request();
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        // Then
+        assert_eq!(resp.status(), StatusCode::OK);
         drop(app);
         drop(spy_handler);
         let snapshot = spy.snapshot();
@@ -131,6 +148,7 @@ mod tests {
 
     #[actix_web::test]
     async fn should_call_create_family_application_layer() {
+        // Given
         let state = mock_actix_state(MockPoolPostgres, MockStateConfig::default());
         let (spy_handler, spy) = spy!();
         let app = test::init_service(App::new().app_data(state.clone()).route(
@@ -149,12 +167,14 @@ mod tests {
             name: "My new family".to_string(),
         };
 
+        // When
         let req = test::TestRequest::post()
             .uri("/families")
             .set_json(&request)
             .to_request();
         let resp = test::call_service(&app, req).await;
 
+        // Then
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         drop(app);
         let snapshot = spy.snapshot();

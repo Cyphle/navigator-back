@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use actix_web::web;
+use serde::Serialize;
 use crate::application::errors::ApplicationErrors;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::{FamilyEntity, FamilyRepository};
@@ -24,17 +25,15 @@ impl Error for ApplicationErrors {
     }
 }
 
-pub async fn get_families_from_username<DB, U, F>(
+pub async fn get_families<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
-    username: Option<String>,
+    username: String,
 ) -> Result<Vec<FamilyEntity>, ApplicationErrors>
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
-    let username = username.ok_or(ApplicationErrors::MissingUsername)?;
-
     let mut tx = state
         .db_connection
         .begin()
@@ -48,9 +47,27 @@ where
         .map_err(ApplicationErrors::Database)
 }
 
+pub struct CreateFamilyCommand {
+    pub username: String,
+    pub name: String,
+}
+
+// pub async fn create_family<DB, U, F>(
+// state: web::Data<ActixState<DB, U, F>>,
+// username: Option<String>,
+//
+// ) -> Result<Vec<FamilyEntity>, ApplicationErrors>
+// where
+// DB: DbConnection,
+// U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
+// F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
+// {
+//
+// }
+
 #[cfg(test)]
 mod tests {
-    use super::{get_families_from_username, ApplicationErrors};
+    use super::{get_families, ApplicationErrors};
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{
         mock_actix_state, MockActixState, MockStateConfig,
@@ -95,17 +112,9 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn should_error_when_username_missing() {
-        let state = make_state_ok();
-        let result = get_families_from_username(state, None).await;
-
-        assert!(matches!(result, Err(ApplicationErrors::MissingUsername)));
-    }
-
-    #[actix_web::test]
     async fn should_error_on_db_connection_failure() {
         let state = make_state_db_error();
-        let result = get_families_from_username(state, Some("john".to_string())).await;
+        let result = get_families(state, "john".to_string()).await;
 
         assert!(matches!(
             result,
@@ -116,7 +125,7 @@ mod tests {
     #[actix_web::test]
     async fn should_error_on_repository_failure() {
         let state = make_state_repo_error();
-        let result = get_families_from_username(state, Some("john".to_string())).await;
+        let result = get_families(state, "john".to_string()).await;
 
         assert!(matches!(
             result,
@@ -127,7 +136,7 @@ mod tests {
     #[actix_web::test]
     async fn should_return_families() {
         let state = make_state_ok();
-        let result = get_families_from_username(state, Some("john".to_string())).await;
+        let result = get_families(state, "john".to_string()).await;
 
         let families = result.expect("families");
         assert_eq!(families.len(), 2);

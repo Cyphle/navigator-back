@@ -61,6 +61,11 @@ where
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
+    #[cfg(test)]
+    if let Ok(Some(username)) = session.get::<String>("test_username") {
+        return Some(username);
+    }
+
     let oidc_client = state.oidc_client.clone();
     match oidc_client {
         Some(client) => {

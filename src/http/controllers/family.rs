@@ -1,5 +1,5 @@
 use crate::config::actix::ActixState;
-use crate::application::family::get_families_from_username;
+use crate::application::family::get_families;
 use crate::http::middlewares::family::{create_family_middleware, get_families_middleware};
 use crate::http::requests::family::CreateFamilyRequest;
 use crate::security::controllers::register::RegisterRequest;
@@ -10,7 +10,7 @@ use log::debug;
 #[get("/families")]
 pub async fn get_families_controller(session: Session, state: web::Data<ActixState>) -> impl Responder {
     debug!("[Controller] Get families");
-    get_families_middleware(session, state, get_families_from_username).await
+    get_families_middleware(session, state, get_families).await
 }
 
 #[post("/families")]

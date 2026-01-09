@@ -9,7 +9,7 @@ pub struct MockFamilyRepository {
 
 #[async_trait]
 impl FamilyRepository<MockTransaction> for MockFamilyRepository {
-    async fn get_family_by_member_username(
+    async fn get_families_for(
         &self,
         _tx: &mut MockTransaction,
         _username: &str,
@@ -18,6 +18,19 @@ impl FamilyRepository<MockTransaction> for MockFamilyRepository {
             Err(sqlx::Error::RowNotFound)
         } else {
             Ok(self.families.clone())
+        }
+    }
+
+    async fn get_family_by_name(
+        &self,
+        _tx: &mut MockTransaction,
+        _username: &str,
+        _name: &str,
+    ) -> Result<FamilyEntity, sqlx::Error> {
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(self.families[0].clone())
         }
     }
 }

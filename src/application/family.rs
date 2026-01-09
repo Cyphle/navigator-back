@@ -1,11 +1,12 @@
-use std::error::Error;
-use std::fmt;
-use actix_web::web;
-use serde::Serialize;
 use crate::application::errors::ApplicationErrors;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::{FamilyEntity, FamilyRepository};
 use crate::repositories::user::UserRepository;
+use actix_web::web;
+use serde::Serialize;
+use std::error::Error;
+use std::fmt;
+use crate::domain::family::family::Family;
 
 impl fmt::Display for ApplicationErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -42,7 +43,7 @@ where
 
     state
         .family_repository
-        .get_family_by_member_username(&mut tx, &username)
+        .get_families_for(&mut tx, &username)
         .await
         .map_err(ApplicationErrors::Database)
 }
@@ -52,27 +53,27 @@ pub struct CreateFamilyCommand {
     pub name: String,
 }
 
-// pub async fn create_family<DB, U, F>(
-// state: web::Data<ActixState<DB, U, F>>,
-// username: Option<String>,
-//
-// ) -> Result<Vec<FamilyEntity>, ApplicationErrors>
-// where
-// DB: DbConnection,
-// U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-// F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
-// {
-//
-// }
+pub async fn create_family<DB, U, F>(
+    state: web::Data<ActixState<DB, U, F>>,
+    username: String,
+    command: CreateFamilyCommand,
+) -> Result<Family, ApplicationErrors>
+where
+    DB: DbConnection,
+    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
+    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
+{
+    Ok(Family {
+        name: "fake".to_string()
+    })
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{get_families, ApplicationErrors};
-    use crate::repositories::family::FamilyEntity;
-    use crate::testing::actix::mock_state::{
-        mock_actix_state, MockActixState, MockStateConfig,
-    };
+    use super::{ApplicationErrors, get_families};
     use crate::config::actix::ActixState;
+    use crate::repositories::family::FamilyEntity;
+    use crate::testing::actix::mock_state::{MockActixState, MockStateConfig, mock_actix_state};
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
     use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
     use crate::testing::repositories::mock_user_repository::MockUserRepository;
@@ -97,7 +98,8 @@ mod tests {
         )
     }
 
-    fn make_state_db_error() -> web::Data<ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>> {
+    fn make_state_db_error()
+    -> web::Data<ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>> {
         mock_actix_state(MockPoolPostgresError, MockStateConfig::default())
     }
 

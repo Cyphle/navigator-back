@@ -81,34 +81,34 @@ where
             tx.rollback()
                 .await
                 .map_err(ApplicationErrors::Database)?;
-            return Err(ApplicationErrors::FamilyAlreadyExists);
+            Err(ApplicationErrors::FamilyAlreadyExists)
         }
-        Err(sqlx::Error::RowNotFound) => {}
+        Err(sqlx::Error::RowNotFound) => {
+            let family_name = command.name.clone();
+            if let Err(err) = state
+                .family_repository
+                .create_family(&mut tx, &username, command)
+                .await
+            {
+                tx.rollback()
+                    .await
+                    .map_err(ApplicationErrors::Database)?;
+                return Err(ApplicationErrors::Database(err));
+            }
+
+            tx.commit()
+                .await
+                .map_err(ApplicationErrors::Database)?;
+
+            Ok(Family { name: family_name })
+        }
         Err(err) => {
             tx.rollback()
                 .await
                 .map_err(ApplicationErrors::Database)?;
-            return Err(ApplicationErrors::Database(err));
+            Err(ApplicationErrors::Database(err))
         }
     }
-
-    let family_name = command.name.clone();
-    if let Err(err) = state
-        .family_repository
-        .create_family(&mut tx, &username, command)
-        .await
-    {
-        tx.rollback()
-            .await
-            .map_err(ApplicationErrors::Database)?;
-        return Err(ApplicationErrors::Database(err));
-    }
-
-    tx.commit()
-        .await
-        .map_err(ApplicationErrors::Database)?;
-
-    Ok(Family { name: family_name })
 }
 
 #[cfg(test)]

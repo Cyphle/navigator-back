@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::error::Error;
 use std::fmt;
 use log::{error, info};
-use crate::domain::family::family::Family;
+use crate::domain::family::family::{CreateFamilyCommand, Family, FamilyRole};
 
 impl fmt::Display for ApplicationErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -48,10 +48,6 @@ where
         .get_families_for(&mut tx, &username)
         .await
         .map_err(ApplicationErrors::Database)
-}
-
-pub struct CreateFamilyCommand {
-    pub name: String,
 }
 
 pub async fn create_family<DB, U, F>(
@@ -113,7 +109,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{ApplicationErrors, CreateFamilyCommand, create_family, get_families};
+    use super::{ApplicationErrors, CreateFamilyCommand, FamilyRole, create_family, get_families};
     use crate::config::actix::ActixState;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{MockActixState, MockStateConfig, mock_actix_state};
@@ -204,6 +200,7 @@ mod tests {
             "john".to_string(),
             CreateFamilyCommand {
                 name: "Family C".to_string(),
+                role: FamilyRole::Owner,
             },
         )
         .await;
@@ -220,6 +217,7 @@ mod tests {
             "john".to_string(),
             CreateFamilyCommand {
                 name: "Family A".to_string(),
+                role: FamilyRole::Owner,
             },
         )
         .await;
@@ -235,6 +233,7 @@ mod tests {
             "john".to_string(),
             CreateFamilyCommand {
                 name: "Family C".to_string(),
+                role: FamilyRole::Owner,
             },
         )
         .await;

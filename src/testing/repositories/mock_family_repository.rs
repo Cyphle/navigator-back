@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::application::family::CreateFamilyCommand;
+use crate::domain::family::family::CreateFamilyCommand;
 use crate::repositories::family::{FamilyEntity, FamilyRepository};
 use crate::testing::repositories::mock_database::MockTransaction;
 

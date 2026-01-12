@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use sqlx::{Error, FromRow, Postgres, Transaction};
-use crate::application::family::CreateFamilyCommand;
+use crate::domain::family::family::CreateFamilyCommand;
 
 #[derive(Debug, FromRow, Clone)]
 pub struct FamilyEntity {
@@ -104,7 +104,7 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
         )
         .bind(family_id.0)
         .bind(user_id.0)
-        .bind("OWNER")
+        .bind(command.role.as_str())
         .execute(&mut **tx)
         .await?;
 

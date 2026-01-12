@@ -1,5 +1,5 @@
 use crate::application::errors::ApplicationErrors;
-use crate::application::family::CreateFamilyCommand;
+use crate::domain::family::family::{CreateFamilyCommand, FamilyRole};
 use crate::config::actix::{ActixState, DbConnection};
 use crate::http::requests::family::CreateFamilyRequest;
 use crate::repositories::family::FamilyEntity;
@@ -82,7 +82,10 @@ where
         Ok(username) => match create_family(
             state,
             username,
-            CreateFamilyCommand { name: request.name },
+            CreateFamilyCommand {
+                name: request.name,
+                role: FamilyRole::Owner,
+            },
         )
         .await
         {

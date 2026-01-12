@@ -1,5 +1,5 @@
 use crate::config::actix::ActixState;
-use crate::application::family::get_families;
+use crate::application::family::{create_family, get_families};
 use crate::http::middlewares::family::{create_family_middleware, get_families_middleware};
 use crate::http::requests::family::CreateFamilyRequest;
 use crate::security::controllers::register::RegisterRequest;
@@ -20,5 +20,5 @@ pub async fn create_family_controller(
     state: web::Data<ActixState>
 ) -> impl Responder {
     debug!("[Controller] Create family");
-    create_family_middleware(session, state, payload.into_inner()).await
+    create_family_middleware(session, state, payload.into_inner(), create_family).await
 }

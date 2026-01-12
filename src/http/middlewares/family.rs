@@ -1,4 +1,5 @@
 use crate::application::errors::ApplicationErrors;
+use crate::application::family::CreateFamilyCommand;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::http::requests::family::CreateFamilyRequest;
 use crate::repositories::family::FamilyEntity;
@@ -59,32 +60,52 @@ where
     }
 }
 
-pub async fn create_family_middleware<DB, U, F>(
+pub async fn create_family_middleware<DB, U, F, CreateFamily, Fut>(
     session: Session,
     state: web::Data<ActixState<DB, U, F>>,
     request: CreateFamilyRequest,
+    create_family: CreateFamily,
 ) -> impl Responder
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
+    CreateFamily: Fn(web::Data<ActixState<DB, U, F>>, String, CreateFamilyCommand) -> Fut,
+    Fut: Future<Output = Result<crate::domain::family::family::Family, ApplicationErrors>>,
 {
     debug!("[Middleware] Creating family middleware");
-    let username = get_connected_username(&session, &state).await;
+    let username = get_connected_username(&session, &state)
+        .await
+        .ok_or(ApplicationErrors::MissingUsername);
 
-    /*
-    -> This in application layer
-    Get family of user by name
-    Check that it does not exist
-    if not, create
-     */
-
-    HttpResponse::Ok()
+    match username {
+        Ok(username) => match create_family(
+            state,
+            username,
+            CreateFamilyCommand { name: request.name },
+        )
+        .await
+        {
+            Ok(_) => HttpResponse::Ok().finish(),
+            Err(ApplicationErrors::FamilyAlreadyExists) => HttpResponse::Conflict().finish(),
+            Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
+            Err(ApplicationErrors::Database(e)) => {
+                error!("Error creating family: {:?}", e);
+                HttpResponse::InternalServerError().finish()
+            }
+        },
+        Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
+        Err(ApplicationErrors::FamilyAlreadyExists) => HttpResponse::Conflict().finish(),
+        Err(ApplicationErrors::Database(e)) => {
+            error!("Error creating family: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::application::family::get_families;
+    use crate::application::family::{create_family, get_families};
     use crate::http::requests::family::CreateFamilyRequest;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{MockActixState, MockStateConfig, mock_actix_state};
@@ -153,14 +174,32 @@ mod tests {
         // Given
         let state = mock_actix_state(MockPoolPostgres, MockStateConfig::default());
         let (spy_handler, spy) = spy!();
+        let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
         let app = test::init_service(App::new().app_data(state.clone()).route(
             "/families",
             web::post().to(
-                move |session: actix_session::Session,
-                      state: web::Data<MockActixState>,
-                      request: web::Json<CreateFamilyRequest>| {
-                    spy_handler();
-                    super::create_family_middleware(session, state, request.into_inner())
+                {
+                    let spy_handler = Arc::clone(&spy_handler);
+                    move |session: actix_session::Session,
+                          state: web::Data<MockActixState>,
+                          request: web::Json<CreateFamilyRequest>| {
+                        let spy_handler = Arc::clone(&spy_handler);
+                        async move {
+                            session
+                                .insert("test_username", "mock_user")
+                                .expect("failed to set test username in session");
+                            super::create_family_middleware(
+                                session,
+                                state,
+                                request.into_inner(),
+                                move |state, username, command| {
+                                    (spy_handler)();
+                                    create_family(state, username, command)
+                                },
+                            )
+                            .await
+                        }
+                    }
                 },
             ),
         ))
@@ -179,6 +218,7 @@ mod tests {
         // Then
         assert_eq!(resp.status(), StatusCode::OK);
         drop(app);
+        drop(spy_handler);
         let snapshot = spy.snapshot();
         assert_eq!(snapshot.num_of_calls(), 1);
     }

@@ -1,10 +1,26 @@
 use std::pin::Pin;
-use crate::config::actix::DbConnection;
+use crate::config::actix::{DbConnection, DbTransaction};
 
 pub struct MockPoolPostgres;
 pub struct MockPoolPostgresError;
 
 pub struct MockTransaction;
+
+impl DbTransaction for MockTransaction {
+    fn commit<'a>(self) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'a>>
+    where
+        Self: 'a,
+    {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn rollback<'a>(self) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'a>>
+    where
+        Self: 'a,
+    {
+        Box::pin(async { Ok(()) })
+    }
+}
 
 impl DbConnection for MockPoolPostgres {
     type Tx<'a> = MockTransaction;

@@ -1,16 +1,18 @@
 use crate::application::errors::ApplicationErrors;
-use crate::config::actix::{ActixState, DbConnection};
+use crate::config::actix::{ActixState, DbConnection, DbTransaction};
 use crate::repositories::family::{FamilyEntity, FamilyRepository};
 use crate::repositories::user::UserRepository;
 use actix_web::web;
 use serde::Serialize;
 use std::error::Error;
 use std::fmt;
+use log::{error, info};
 use crate::domain::family::family::Family;
 
 impl fmt::Display for ApplicationErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ApplicationErrors::FamilyAlreadyExists => write!(f, "Family already exists"),
             ApplicationErrors::MissingUsername => write!(f, "No username provided"),
             ApplicationErrors::Database(err) => write!(f, "Database error: {}", err),
         }
@@ -49,7 +51,6 @@ where
 }
 
 pub struct CreateFamilyCommand {
-    pub username: String,
     pub name: String,
 }
 
@@ -63,14 +64,56 @@ where
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
-    Ok(Family {
-        name: "fake".to_string()
-    })
+    info!("Creating family {} for user '{}'", &command.name, &username);
+
+    let mut tx = state
+        .db_connection
+        .begin()
+        .await
+        .map_err(ApplicationErrors::Database)?;
+
+    match state.family_repository
+        .get_family_by_name(&mut tx, username.as_str(), command.name.as_str())
+        .await
+    {
+        Ok(_) => {
+            error!("Family {} already exists for : {}", &command.name, &username);
+            tx.rollback()
+                .await
+                .map_err(ApplicationErrors::Database)?;
+            return Err(ApplicationErrors::FamilyAlreadyExists);
+        }
+        Err(sqlx::Error::RowNotFound) => {}
+        Err(err) => {
+            tx.rollback()
+                .await
+                .map_err(ApplicationErrors::Database)?;
+            return Err(ApplicationErrors::Database(err));
+        }
+    }
+
+    let family_name = command.name.clone();
+    if let Err(err) = state
+        .family_repository
+        .create_family(&mut tx, &username, command)
+        .await
+    {
+        tx.rollback()
+            .await
+            .map_err(ApplicationErrors::Database)?;
+        return Err(ApplicationErrors::Database(err));
+    }
+
+    tx.commit()
+        .await
+        .map_err(ApplicationErrors::Database)?;
+
+    Ok(Family { name: family_name })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ApplicationErrors, get_families};
+    use super::{ApplicationErrors, CreateFamilyCommand, create_family, get_families};
     use crate::config::actix::ActixState;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{MockActixState, MockStateConfig, mock_actix_state};
@@ -144,5 +187,61 @@ mod tests {
         assert_eq!(families.len(), 2);
         assert_eq!(families[0].name, "Family A");
         assert_eq!(families[1].name, "Family B");
+    }
+
+    #[actix_web::test]
+    async fn should_create_family_when_not_exists() {
+        let state = mock_actix_state(
+            MockPoolPostgres,
+            MockStateConfig {
+                families: Some(vec![]),
+                ..MockStateConfig::default()
+            },
+        );
+
+        let result = create_family(
+            state,
+            "john".to_string(),
+            CreateFamilyCommand {
+                name: "Family C".to_string(),
+            },
+        )
+        .await;
+
+        let family = result.expect("family");
+        assert_eq!(family.name, "Family C");
+    }
+
+    #[actix_web::test]
+    async fn should_error_when_family_already_exists() {
+        let state = make_state_ok();
+        let result = create_family(
+            state,
+            "john".to_string(),
+            CreateFamilyCommand {
+                name: "Family A".to_string(),
+            },
+        )
+        .await;
+
+        assert!(matches!(result, Err(ApplicationErrors::FamilyAlreadyExists)));
+    }
+
+    #[actix_web::test]
+    async fn should_error_when_create_family_fails() {
+        let state = make_state_repo_error();
+        let result = create_family(
+            state,
+            "john".to_string(),
+            CreateFamilyCommand {
+                name: "Family C".to_string(),
+            },
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(ApplicationErrors::Database(sqlx::Error::RowNotFound))
+        ));
     }
 }

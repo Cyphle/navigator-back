@@ -39,6 +39,7 @@ where
             HttpResponse::Ok().json(UserView { username: user.username })
         }
         Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
+        Err(ApplicationErrors::FamilyAlreadyExists) => HttpResponse::Conflict().finish(),
         Err(ApplicationErrors::Database(e)) => {
             error!("Error getting families: {:?}", e);
             HttpResponse::InternalServerError().finish()

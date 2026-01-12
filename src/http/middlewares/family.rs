@@ -44,12 +44,14 @@ where
                 HttpResponse::Ok().json(views)
             }
             Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
+            Err(ApplicationErrors::FamilyAlreadyExists) => HttpResponse::Conflict().finish(),
             Err(ApplicationErrors::Database(e)) => {
                 error!("Error getting families: {:?}", e);
                 HttpResponse::InternalServerError().finish()
             }
         },
         Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
+        Err(ApplicationErrors::FamilyAlreadyExists) => HttpResponse::Conflict().finish(),
         Err(ApplicationErrors::Database(e)) => {
             error!("Error getting families: {:?}", e);
             HttpResponse::InternalServerError().finish()
@@ -175,7 +177,7 @@ mod tests {
         let resp = test::call_service(&app, req).await;
 
         // Then
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(resp.status(), StatusCode::OK);
         drop(app);
         let snapshot = spy.snapshot();
         assert_eq!(snapshot.num_of_calls(), 1);

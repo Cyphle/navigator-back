@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use sqlx::{Error, FromRow, Postgres, Transaction};
+use crate::application::family::CreateFamilyCommand;
 
 #[derive(Debug, FromRow, Clone)]
 pub struct FamilyEntity {
@@ -31,6 +32,13 @@ pub trait FamilyRepository<Tx>: Send + Sync {
         username: &str,
         name: &str,
     ) -> Result<FamilyEntity, sqlx::Error>;
+
+    async fn create_family(
+        &self,
+        tx: &mut Tx,
+        username: &str,
+        command: CreateFamilyCommand
+    ) -> Result<String, sqlx::Error>;
 }
 
 pub struct SqlxFamilyRepository;
@@ -74,5 +82,32 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
             .await?;
 
         Ok(family)
+    }
+
+    async fn create_family(&self, tx: &mut Transaction<'a, Postgres>, username: &str, command: CreateFamilyCommand) -> Result<String, Error> {
+        let family_id: (i32,) = sqlx::query_as(
+            "INSERT INTO families (name) VALUES ($1) RETURNING id",
+        )
+        .bind(&command.name)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        let user_id: (i32,) = sqlx::query_as(
+            "SELECT id FROM users WHERE username = $1 LIMIT 1",
+        )
+        .bind(username)
+        .fetch_one(&mut **tx)
+        .await?;
+
+        sqlx::query(
+            "INSERT INTO family_members (family_id, user_id, role) VALUES ($1, $2, $3)",
+        )
+        .bind(family_id.0)
+        .bind(user_id.0)
+        .bind("OWNER")
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(format!("Creation of family {} for username {} done", command.name, username))
     }
 }

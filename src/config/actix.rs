@@ -9,13 +9,39 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 pub trait DbConnection: Send + Sync {
-    type Tx<'a>: Send
+    type Tx<'a>: DbTransaction + Send
     where
         Self: 'a;
 
     fn begin<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Self::Tx<'a>, sqlx::Error>> + Send + 'a>>;
+}
+
+pub trait DbTransaction: Send {
+    fn commit<'a>(self) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'a>>
+    where
+        Self: 'a;
+
+    fn rollback<'a>(self) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'a>>
+    where
+        Self: 'a;
+}
+
+impl<'a> DbTransaction for Transaction<'a, Postgres> {
+    fn commit<'b>(self) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'b>>
+    where
+        Self: 'b,
+    {
+        Box::pin(async move { self.commit().await })
+    }
+
+    fn rollback<'b>(self) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'b>>
+    where
+        Self: 'b,
+    {
+        Box::pin(async move { self.rollback().await })
+    }
 }
 
 impl DbConnection for Pool<Postgres> {

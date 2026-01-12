@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use crate::application::family::CreateFamilyCommand;
 use crate::repositories::family::{FamilyEntity, FamilyRepository};
 use crate::testing::repositories::mock_database::MockTransaction;
 
@@ -29,8 +30,23 @@ impl FamilyRepository<MockTransaction> for MockFamilyRepository {
     ) -> Result<FamilyEntity, sqlx::Error> {
         if self.should_error {
             Err(sqlx::Error::RowNotFound)
+        } else if self.families.is_empty() {
+            Err(sqlx::Error::RowNotFound)
         } else {
             Ok(self.families[0].clone())
+        }
+    }
+
+    async fn create_family(
+        &self,
+        _tx: &mut MockTransaction,
+        _username: &str,
+        command: CreateFamilyCommand,
+    ) -> Result<String, sqlx::Error> {
+        if self.should_error {
+            Err(sqlx::Error::RowNotFound)
+        } else {
+            Ok(format!("Creation of family {} done", command.name))
         }
     }
 }

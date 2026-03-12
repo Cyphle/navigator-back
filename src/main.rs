@@ -9,7 +9,7 @@ mod application;
 use crate::config::actix::ActixState;
 use crate::config::database::connect;
 use crate::http::controllers::technical::{live, ready};
-use crate::http::controllers::user::users_me;
+use crate::http::controllers::user::users_info;
 use crate::repositories::user::SqlxUserRepository;
 use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
@@ -78,7 +78,7 @@ async fn main() -> std::io::Result<()> {
                             .service(login)
                             .service(logout)
                             .service(register)
-                            .service(users_me)
+                            .service(users_info)
                             // Technical
                             .service(live)
                             .service(ready)

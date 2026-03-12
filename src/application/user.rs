@@ -5,7 +5,7 @@ use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::FamilyRepository;
 use crate::repositories::user::{UserEntity, UserRepository};
 
-pub async fn get_users_me<DB, U, F>(
+pub async fn get_users_info<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
     username: Option<String>,
 ) -> Result<UserEntity, ApplicationErrors>
@@ -32,7 +32,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::get_users_me;
+    use super::get_users_info;
     use crate::application::errors::ApplicationErrors;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{
@@ -81,28 +81,28 @@ mod tests {
     #[actix_web::test]
     async fn should_error_when_username_missing() {
         let state = make_state_ok();
-        let result = get_users_me(state, None).await;
+        let result = get_users_info(state, None).await;
         assert!(matches!(result, Err(ApplicationErrors::MissingUsername)));
     }
 
     #[actix_web::test]
     async fn should_error_on_db_connection_failure() {
         let state = make_state_db_error();
-        let result = get_users_me(state, Some("alice".to_string())).await;
+        let result = get_users_info(state, Some("alice".to_string())).await;
         assert!(matches!(result, Err(ApplicationErrors::Database(_))));
     }
 
     #[actix_web::test]
     async fn should_error_on_repository_failure() {
         let state = make_state_repo_error();
-        let result = get_users_me(state, Some("bob".to_string())).await;
+        let result = get_users_info(state, Some("bob".to_string())).await;
         assert!(matches!(result, Err(ApplicationErrors::Database(_))));
     }
 
     #[actix_web::test]
     async fn should_return_user() {
         let state = make_state_ok();
-        let result = get_users_me(state, Some("carol".to_string())).await;
+        let result = get_users_info(state, Some("carol".to_string())).await;
         let user = result.expect("Expected user");
         assert_eq!(user.username, "mock_user");
     }

@@ -1,5 +1,5 @@
 use crate::application::errors::ApplicationErrors;
-use crate::application::user::get_users_me;
+use crate::application::user::get_users_info;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::repositories::family::FamilyRepository;
 use crate::repositories::user::UserRepository;
@@ -10,11 +10,11 @@ use log::{debug, error};
 use serde::Serialize;
 
 #[derive(Serialize)]
-struct UserView {
+pub struct UserView {
     username: String,
 }
 
-pub async fn users_me_middleware<DB, U, F>(
+pub async fn users_info_middleware<DB, U, F>(
     session: Session,
     state: web::Data<ActixState<DB, U, F>>,
 ) -> impl Responder
@@ -34,14 +34,14 @@ where
         None => None,
     };
 
-    match get_users_me(state, username).await {
+    match get_users_info(state, username).await {
         Ok(user) => {
             HttpResponse::Ok().json(UserView { username: user.username })
         }
         Err(ApplicationErrors::MissingUsername) => HttpResponse::Unauthorized().finish(),
         Err(ApplicationErrors::FamilyAlreadyExists) => HttpResponse::Conflict().finish(),
         Err(ApplicationErrors::Database(e)) => {
-            error!("Error getting families: {:?}", e);
+            error!("Error while getting user info: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -49,7 +49,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::users_me_middleware;
+    use super::users_info_middleware;
     use crate::repositories::family::FamilyEntity;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
@@ -74,7 +74,7 @@ mod tests {
                 web::get().to(
                     move |session: actix_session::Session,
                           state: web::Data<MockActixState>| {
-                        users_me_middleware(session, state)
+                        users_info_middleware(session, state)
                     },
                 ),
             ),

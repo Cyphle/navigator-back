@@ -49,3 +49,8 @@ else
   echo "Failed to create user. HTTP status: $HTTP_STATUS"
   exit 1
 fi
+
+echo "Inserting john.doe into local PostgreSQL database..."
+PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d navigator \
+  -c "INSERT INTO users (username) VALUES ('john.doe') ON CONFLICT DO NOTHING;"
+echo "Done."

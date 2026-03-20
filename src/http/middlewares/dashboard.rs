@@ -1,5 +1,6 @@
 use crate::application::errors::ApplicationErrors;
 use crate::config::actix::ActixState;
+use crate::domain::dashboard::dashboard::Dashboard;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
@@ -27,7 +28,7 @@ where
     U: for<'a> crate::repositories::user::UserRepository<<DB as crate::config::actix::DbConnection>::Tx<'a>>,
     F: for<'a> crate::repositories::family::FamilyRepository<<DB as crate::config::actix::DbConnection>::Tx<'a>>,
     GetDashboard: Fn(web::Data<ActixState<DB, U, F>>, String, String) -> Fut,
-    Fut: Future<Output = Result<DashboardView, ApplicationErrors>>,
+    Fut: Future<Output = Result<Dashboard, ApplicationErrors>>,
 {
     debug!("[Middleware] Getting dashboard");
 
@@ -65,13 +66,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::http::middlewares::dashboard::DashboardView;
+    use crate::domain::dashboard::dashboard::Dashboard;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
+    use actix_web::http::StatusCode;
     use actix_web::{test, web, App};
     use spy::{spy, Spy};
     use std::sync::Arc;
-    use actix_web::http::StatusCode;
 
     #[actix_web::test]
     async fn should_call_get_dashboard_from_application_layer() {
@@ -101,7 +102,7 @@ mod tests {
                                 super::get_dashboard_middleware(session, state, family_id, move |_state, _username, _family_id| {
                                     (spy_handler)();
                                     async {
-                                        Ok(DashboardView {
+                                        Ok(Dashboard {
                                             agenda: vec![],
                                             todos: vec![],
                                             weeklyMenu: "".to_string(),

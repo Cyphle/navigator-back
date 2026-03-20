@@ -1,4 +1,4 @@
 pub mod family;
 pub mod user;
 pub mod errors;
-mod dashboard;
+pub mod dashboard;

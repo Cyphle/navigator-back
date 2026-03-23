@@ -9,7 +9,7 @@ mod application;
 use crate::config::actix::ActixState;
 use crate::config::database::connect;
 use crate::http::controllers::technical::{live, ready};
-use crate::http::controllers::user::users_info;
+use crate::http::controllers::user::users_info_endpoint;
 use crate::repositories::user::SqlxUserRepository;
 use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
@@ -22,6 +22,8 @@ use log::info;
 use std::sync::{Arc, Mutex};
 use crate::config::cors::actix_cors_config;
 use crate::config::session::actix_session_config;
+use crate::http::controllers::dashboard::get_dashboard_endpoint;
+use crate::http::controllers::family::{create_family_endpoint, get_families_endpoint};
 use crate::repositories::family::SqlxFamilyRepository;
 
 #[actix_web::main]
@@ -78,7 +80,11 @@ async fn main() -> std::io::Result<()> {
                             .service(login)
                             .service(logout)
                             .service(register)
-                            .service(users_info)
+                            .service(users_info_endpoint)
+                            // Domain
+                            .service(get_dashboard_endpoint)
+                            .service(get_families_endpoint)
+                            .service(create_family_endpoint)
                             // Technical
                             .service(live)
                             .service(ready)

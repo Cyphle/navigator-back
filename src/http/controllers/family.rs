@@ -8,13 +8,13 @@ use actix_web::{get, post, web, Responder};
 use log::debug;
 
 #[get("/families")]
-pub async fn get_families_controller(session: Session, state: web::Data<ActixState>) -> impl Responder {
+pub async fn get_families_endpoint(session: Session, state: web::Data<ActixState>) -> impl Responder {
     debug!("[Controller] Get families");
     get_families_middleware(session, state, get_families).await
 }
 
 #[post("/families")]
-pub async fn create_family_controller(
+pub async fn create_family_endpoint(
     payload: web::Json<CreateFamilyRequest>,
     session: Session,
     state: web::Data<ActixState>

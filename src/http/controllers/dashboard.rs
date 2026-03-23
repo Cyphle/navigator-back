@@ -6,7 +6,7 @@ use crate::http::middlewares::dashboard::get_dashboard_middleware;
 use crate::application::dashboard::get_dashboard as get_dashboard_app;
 
 #[get("/dashboard/{family_id}")]
-pub async fn get_dashboard(
+pub async fn get_dashboard_endpoint(
     session: Session,
     state: web::Data<ActixState>,
     family_id: web::Path<String>

@@ -22,6 +22,7 @@ use crate::config::cors::actix_cors_config;
 use crate::config::session::actix_session_config;
 use domains::dashboard::http::dashboard_controller::get_dashboard_endpoint;
 use domains::family::http::family_controller::{create_family_endpoint, get_families_endpoint};
+use crate::domains::calendars::http::calendar_controller::get_calendar_summary_endpoint;
 use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
 
 #[actix_web::main]
@@ -83,6 +84,7 @@ async fn main() -> std::io::Result<()> {
                             .service(get_dashboard_endpoint)
                             .service(get_families_endpoint)
                             .service(create_family_endpoint)
+                            .service(get_calendar_summary_endpoint)
                             // Technical
                             .service(live)
                             .service(ready)

@@ -2,7 +2,7 @@ use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
 use log::debug;
 use crate::config::actix::ActixState;
-use crate::domains::calendars::http::calendar_views::CalendarSummaryView;
+use crate::domains::calendar::http::calendar_views::CalendarSummaryView;
 
 #[get("/families/{family_id}/calendars/summary")]
 pub async fn get_calendar_summary_endpoint(

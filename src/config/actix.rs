@@ -1,5 +1,6 @@
-use crate::repositories::family::{FamilyRepository, SqlxFamilyRepository};
-use crate::repositories::user::{SqlxUserRepository, UserRepository};
+use crate::domains::family::repositories::family_repository::FamilyRepository;
+use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
+use crate::domains::user::repositories::user_repository::{SqlxUserRepository, UserRepository};
 use crate::security::oidc::OidcConfig;
 use openid::{Client, Discovered, StandardClaims};
 use sqlx::{Pool, Postgres, Transaction};

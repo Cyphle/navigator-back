@@ -1,8 +1,8 @@
 use actix_web::http::StatusCode;
 use async_trait::async_trait;
 use sqlx::{Postgres, Transaction};
-use crate::domain::user::user::User;
-use crate::repositories::user::{UserEntity, UserRepository};
+use crate::domains::user::domain::user::User;
+use crate::domains::user::repositories::user_repository::{UserEntity, UserRepository};
 use crate::testing::repositories::mock_database::MockTransaction;
 
 pub struct MockUserRepository {

@@ -40,11 +40,11 @@ async fn logout(
                 }
             }
             None => {
-                error!("No session data found");
+                error!("No session repositories found");
             }
         },
         Err(e) => {
-            error!("No session data found: {}", e);
+            error!("No session repositories found: {}", e);
             return HttpResponse::PermanentRedirect()
                 .append_header(("Location", "/"))
                 .finish();

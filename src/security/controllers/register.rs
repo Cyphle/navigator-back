@@ -1,4 +1,5 @@
 use crate::config::actix::ActixState;
+use crate::security::controllers::auth_request::AuthRequest;
 use crate::security::token::get_admin_access_token;
 use actix_session::Session;
 use actix_web::web::Data;
@@ -6,9 +7,8 @@ use actix_web::{post, web, HttpResponse, Responder};
 use log::{error, info};
 use reqwest::Client as HttpClient;
 use serde::Serialize;
-use crate::domain::user::user::User;
-use crate::repositories::user::UserRepository;
-use crate::security::controllers::auth_request::AuthRequest;
+use crate::domains::user::domain::user::User;
+use crate::domains::user::repositories::user_repository::UserRepository;
 
 #[derive(Serialize)]
 struct KeycloakUser {
@@ -51,10 +51,13 @@ pub async fn register(
 
     let mut tx = match state.db_connection.begin().await {
         Ok(tx) => tx,
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => {
+            let error_msg: String = e.to_string();
+            return HttpResponse::InternalServerError().body(error_msg);
+        }
     };
 
-    let result = state
+    let result: Result<(u64, actix_web::http::StatusCode), sqlx::Error> = state
         .user_repository
         .create_user(&mut tx, &user)
         .await;
@@ -64,7 +67,8 @@ pub async fn register(
             match state.oidc_client.as_ref() {
                 Some(client) => {
                     if let Err(e) = tx.commit().await {
-                        return HttpResponse::InternalServerError().body(e.to_string());
+                        let error_msg: String = e.to_string();
+                        return HttpResponse::InternalServerError().body(error_msg);
                     }
 
                     let client = client.lock().unwrap();
@@ -108,7 +112,10 @@ pub async fn register(
                 },
             }
         },
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => {
+            let error_msg: String = e.to_string();
+            return HttpResponse::InternalServerError().body(error_msg);
+        }
     }
 
     HttpResponse::Created().finish()

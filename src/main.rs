@@ -1,16 +1,14 @@
 mod config;
-mod domain;
-mod http;
-mod repositories;
 mod security;
 mod testing;
-mod application;
+mod domains;
+mod technical;
 
 use crate::config::actix::ActixState;
 use crate::config::database::connect;
-use crate::http::controllers::technical::{live, ready};
-use crate::http::controllers::user::users_info_endpoint;
-use crate::repositories::user::SqlxUserRepository;
+use crate::technical::technical_controller::{live, ready};
+use domains::user::http::user_controller::users_info_endpoint;
+use domains::user::repositories::user_repository::SqlxUserRepository;
 use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
 use crate::security::controllers::register::register;
@@ -22,9 +20,9 @@ use log::info;
 use std::sync::{Arc, Mutex};
 use crate::config::cors::actix_cors_config;
 use crate::config::session::actix_session_config;
-use crate::http::controllers::dashboard::get_dashboard_endpoint;
-use crate::http::controllers::family::{create_family_endpoint, get_families_endpoint};
-use crate::repositories::family::SqlxFamilyRepository;
+use domains::dashboard::http::dashboard_controller::get_dashboard_endpoint;
+use domains::family::http::family_controller::{create_family_endpoint, get_families_endpoint};
+use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

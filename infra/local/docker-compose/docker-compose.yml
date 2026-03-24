@@ -8,7 +8,7 @@ services:
     ports:
       - "5434:5432"
     volumes:
-      - navigatorpgdata:/var/lib/postgresql/data
+      - navigatorpgdata:/var/lib/postgresql/repositories
     networks:
       - navigator
 
@@ -21,7 +21,7 @@ services:
       - KEYCLOAK_ADMIN=admin
       - KEYCLOAK_ADMIN_PASSWORD=admin
     volumes:
-      - ./keycloak/realms/navigator.json:/opt/keycloak/data/import/navigator.json
+      - ./keycloak/realms/navigator.json:/opt/keycloak/repositories/import/navigator.json
     ports:
       - "8181:8080"
     networks:
@@ -32,7 +32,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - redis_data:/repositories
     networks:
       - navigator
       

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use actix_web::web;
 use crate::config::actix::{ActixState, DbConnection};
-use crate::repositories::family::FamilyEntity;
+use crate::domains::family::repositories::family_entity::FamilyEntity;
 use crate::testing::repositories::mock_database::MockPoolPostgres;
 use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
 use crate::testing::repositories::mock_user_repository::MockUserRepository;

@@ -10,8 +10,8 @@ use reqwest::Client as HttpClient;
 use serde::Deserialize;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::config::application::USER_SESSION_KEY;
-use crate::repositories::family::FamilyRepository;
-use crate::repositories::user::UserRepository;
+use crate::domains::family::repositories::family_repository::FamilyRepository;
+use crate::domains::user::repositories::user_repository::UserRepository;
 
 // To get the username from a Bearer token
 pub async fn get_username_from_bearer(

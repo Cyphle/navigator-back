@@ -2,6 +2,9 @@
 
 Navigate through your life swiftly.
 
+# TODO
+- dans les use case y a la gestion des transactions. Il faut que ça soit dans les middleware. Ou alors merge use case et middleware dans une couche genre application
+
 # Features
 ## Gestion de la famille
 - Récupérer la liste des membres de la famille

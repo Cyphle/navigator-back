@@ -7,6 +7,9 @@ use crate::domains::user::domain::user::User;
 pub struct UserEntity {
     pub id: i32,
     pub username: String,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
 }
 
 #[async_trait]
@@ -38,8 +41,14 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
         tx: &mut Transaction<'a, Postgres>,
         user: &User,
     ) -> Result<(u64, StatusCode), sqlx::Error> {
-        let row: (i32,) = sqlx::query_as("INSERT INTO users (username) VALUES ($1) RETURNING id")
+        let row: (i32,) = sqlx::query_as("
+            INSERT INTO users (username, email, first_name, last_name)
+            VALUES ($1, $2, $3, $4) RETURNING id
+        ")
             .bind(&user.username)
+            .bind(&user.email)
+            .bind(&user.first_name)
+            .bind(&user.last_name)
             .fetch_one(&mut **tx)
             .await?;
 
@@ -54,7 +63,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
     ) -> Result<UserEntity, sqlx::Error> {
         // Postgres uses positional parameters like $1
         let row = sqlx::query_as::<sqlx::Postgres, UserEntity>(
-            "SELECT id, username FROM users WHERE username = $1 LIMIT 1",
+            "SELECT id, username, email, first_name, last_name FROM users WHERE username = $1 LIMIT 1",
         )
             .bind(username)
             .fetch_one(&mut **tx)
@@ -97,12 +106,18 @@ mod tests {
         let repo = MockUserRepository {
             fixed_id: 42,
             fixed_username: "alice".to_string(),
+            fixed_email: "alice@example.com".to_string(),
+            fixed_first_name: "Alice".to_string(),
+            fixed_last_name: "Alicia".to_string(),
             should_error: false,
         };
         let mut tx = MockTransaction;
         let user = User {
             id: Some(42),
             username: "ignored".to_string(),
+            email: "ignored".to_string(),
+            first_name: "ignored".to_string(),
+            last_name: "ignored".to_string(),
         };
 
         let result = repo.create_user(&mut tx, &user).await.unwrap();
@@ -115,6 +130,9 @@ mod tests {
         let repo = MockUserRepository {
             fixed_id: 7,
             fixed_username: "bob".to_string(),
+            fixed_email: "bob@example.com".to_string(),
+            fixed_first_name: "Bob".to_string(),
+            fixed_last_name: "Bobby".to_string(),
             should_error: false,
         };
         let mut tx = MockTransaction;
@@ -128,17 +146,23 @@ mod tests {
     async fn mock_repo_get_or_create_returns_fixed_entity() {
         let repo = MockUserRepository {
             fixed_id: 9,
-            fixed_username: "carol".to_string(),
+            fixed_username: "johndoe".to_string(),
+            fixed_email: "johndoe@example.com".to_string(),
+            fixed_first_name: "John".to_string(),
+            fixed_last_name: "Doe".to_string(),
             should_error: false,
         };
         let mut tx = MockTransaction;
         let user = User {
             id: Some(9),
             username: "ignored".to_string(),
+            email: "ignored".to_string(),
+            first_name: "ignored".to_string(),
+            last_name: "ignored".to_string(),
         };
 
         let entity = repo.get_or_create_user(&mut tx, &user).await.unwrap();
         assert_eq!(entity.id, 9);
-        assert_eq!(entity.username, "carol");
+        assert_eq!(entity.username, "johndoe");
     }
 }

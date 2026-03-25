@@ -35,4 +35,3 @@ Navigate through your life swiftly.
 - Partager une recette avec la famille
 - Sélectionner des recettes à faire
 - Générer la liste des ingrédients
-

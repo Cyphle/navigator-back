@@ -2,7 +2,7 @@ use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::family::repositories::family_repository::FamilyRepository;
 use crate::domains::user::repositories::user_repository::UserRepository;
 use crate::domains::user::usecases::get_user_info_use_case::get_user_info_use_case;
-use crate::security::token::{get_connected_username, get_username_from_session};
+use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
@@ -12,11 +12,11 @@ use serde::{Deserialize, Serialize};
 pub struct UserView {
     pub id: i32,
     username: String,
-    // pub email: String,
-    // #[serde(rename = "firstName")]
-    // pub first_name: String,
-    // #[serde(rename = "lastName")]
-    // pub last_name: String,
+    pub email: String,
+    #[serde(rename = "firstName")]
+    pub first_name: String,
+    #[serde(rename = "lastName")]
+    pub last_name: String,
 }
 
 pub async fn users_info_middleware<DB, U, F>(
@@ -40,7 +40,10 @@ where
         Ok(user) => {
             HttpResponse::Ok().json(UserView {
                 id: user.id.unwrap_or(-1),
-                username: user.username
+                username: user.username,
+                email: user.email,
+                first_name: user.first_name,
+                last_name: user.last_name,
             })
         }
         Err(e) => {

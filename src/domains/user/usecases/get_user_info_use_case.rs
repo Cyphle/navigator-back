@@ -33,6 +33,9 @@ where
         .map(|user| User {
             id: Some(user.id),
             username: user.username,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
         })
         .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)
 }

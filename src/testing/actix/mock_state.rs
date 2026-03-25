@@ -31,6 +31,9 @@ where
         user_repository: Arc::new(MockUserRepository {
             fixed_id: 1,
             fixed_username: "mock_user".to_string(),
+            fixed_email: "mock_email".to_string(),
+            fixed_first_name: "mock_first_name".to_string(),
+            fixed_last_name: "mock_last_name".to_string(),
             should_error: config.user_should_error,
         }),
         family_repository: Arc::new(MockFamilyRepository {

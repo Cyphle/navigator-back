@@ -48,6 +48,9 @@ pub async fn register(
     let user = User {
         id: None,
         username: request_payload.username.to_owned(),
+        email: request_payload.email.to_owned(),
+        first_name: request_payload.first_name.to_owned(),
+        last_name: request_payload.last_name.to_owned(),
     };
 
     let mut tx = match state.db_connection.begin().await {

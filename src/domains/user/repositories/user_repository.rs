@@ -7,7 +7,7 @@ use crate::domains::user::domain::user::User;
 pub struct UserEntity {
     pub id: i32,
     pub username: String,
-    pub email: String,
+    pub email: Option<String>,
     pub first_name: String,
     pub last_name: String,
 }

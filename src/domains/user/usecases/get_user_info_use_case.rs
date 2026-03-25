@@ -6,7 +6,7 @@ use crate::domains::common::errors::missing_username_error::MissingUsernameError
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::repositories::family_repository::FamilyRepository;
 use crate::domains::user::domain::user::User;
-use crate::domains::user::repositories::user_repository::{UserEntity, UserRepository};
+use crate::domains::user::repositories::user_repository::UserRepository;
 
 pub async fn get_user_info_use_case<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
@@ -33,7 +33,7 @@ where
         .map(|user| User {
             id: Some(user.id),
             username: user.username,
-            email: user.email,
+            email: user.email.unwrap_or("".to_string()),
             first_name: user.first_name,
             last_name: user.last_name,
         })

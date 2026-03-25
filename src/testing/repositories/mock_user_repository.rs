@@ -32,7 +32,7 @@ impl MockUserRepository {
         UserEntity {
             id: self.fixed_id as i32,
             username: self.fixed_username.clone(),
-            email: self.fixed_email.clone(),
+            email: Some(self.fixed_email.clone()),
             first_name: self.fixed_first_name.clone(),
             last_name: self.fixed_last_name.clone(),
         }

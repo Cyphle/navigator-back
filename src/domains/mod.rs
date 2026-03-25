@@ -4,3 +4,6 @@ pub mod user;
 pub mod common;
 pub mod calendar;
 pub mod todo;
+pub mod recipe;
+pub mod shopping_list;
+pub mod meal;

@@ -24,6 +24,9 @@ use domains::dashboard::http::dashboard_controller::get_dashboard_endpoint;
 use domains::family::http::family_controller::{create_family_endpoint, get_families_endpoint};
 use crate::domains::calendar::http::calendar_controller::get_calendar_summary_endpoint;
 use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
+use crate::domains::meal::http::meal_controller::get_meal_summary_endpoint;
+use crate::domains::recipe::http::recipe_controller::get_recipe_summary_endpoint;
+use crate::domains::shopping_list::http::shopping_list_controller::get_shopping_list_summary_endpoint;
 use crate::domains::todo::http::todo_controller::get_todo_summary_endpoint;
 
 #[actix_web::main]
@@ -87,6 +90,9 @@ async fn main() -> std::io::Result<()> {
                             .service(create_family_endpoint)
                             .service(get_calendar_summary_endpoint)
                             .service(get_todo_summary_endpoint)
+                            .service(get_recipe_summary_endpoint)
+                            .service(get_shopping_list_summary_endpoint)
+                            .service(get_meal_summary_endpoint)
                             // Technical
                             .service(live)
                             .service(ready)

@@ -1,5 +1,4 @@
 use crate::config::actix::ActixState;
-use crate::domains::calendar::http::calendar_views::CalendarSummaryView;
 use crate::domains::todo::http::todo_views::TodoSummaryView;
 use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};

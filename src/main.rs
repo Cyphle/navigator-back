@@ -5,29 +5,29 @@ mod domains;
 mod technical;
 
 use crate::config::actix::ActixState;
-use crate::config::database::connect;
-use crate::technical::technical_controller::{live, ready};
-use domains::user::http::user_controller::users_info_endpoint;
-use domains::user::repositories::user_repository::SqlxUserRepository;
-use crate::security::controllers::login::login;
-use crate::security::controllers::logout::logout;
-use crate::security::controllers::register::register;
-use crate::security::oidc::get_client;
-use actix_session::storage::RedisSessionStore;
-use actix_web::cookie::Key;
-use actix_web::{web, App, HttpServer};
-use log::info;
-use std::sync::{Arc, Mutex};
 use crate::config::cors::actix_cors_config;
+use crate::config::database::connect;
 use crate::config::session::actix_session_config;
-use domains::dashboard::http::dashboard_controller::get_dashboard_endpoint;
-use domains::family::http::family_controller::{create_family_endpoint, get_families_endpoint};
 use crate::domains::calendar::http::calendar_controller::get_calendar_summary_endpoint;
 use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
 use crate::domains::meal::http::meal_controller::get_meal_summary_endpoint;
 use crate::domains::recipe::http::recipe_controller::get_recipe_summary_endpoint;
 use crate::domains::shopping_list::http::shopping_list_controller::get_shopping_list_summary_endpoint;
 use crate::domains::todo::http::todo_controller::get_todo_summary_endpoint;
+use crate::security::controllers::login::login;
+use crate::security::controllers::logout::logout;
+use crate::security::controllers::register::register;
+use crate::security::oidc::get_client;
+use crate::technical::technical_controller::{live, ready};
+use actix_session::storage::RedisSessionStore;
+use actix_web::cookie::Key;
+use actix_web::{web, App, HttpServer};
+use domains::dashboard::http::dashboard_controller::get_dashboard_endpoint;
+use domains::family::http::family_controller::{create_family_endpoint, get_families_endpoint};
+use domains::user::http::user_controller::users_info_endpoint;
+use domains::user::repositories::user_repository::SqlxUserRepository;
+use log::info;
+use std::sync::{Arc, Mutex};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -85,7 +85,6 @@ async fn main() -> std::io::Result<()> {
                             .service(register)
                             .service(users_info_endpoint)
                             // Domain
-                            .service(get_dashboard_endpoint)
                             .service(get_families_endpoint)
                             .service(create_family_endpoint)
                             .service(get_calendar_summary_endpoint)

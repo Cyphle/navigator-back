@@ -5,12 +5,13 @@ use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::repositories::family_repository::FamilyRepository;
+use crate::domains::user::domain::user::User;
 use crate::domains::user::repositories::user_repository::{UserEntity, UserRepository};
 
-pub async fn get_users_info<DB, U, F>(
+pub async fn get_user_info_use_case<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
     username: Option<String>,
-) -> Result<UserEntity, Box<dyn ApplicationError>>
+) -> Result<User, Box<dyn ApplicationError>>
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
@@ -29,12 +30,16 @@ where
         .user_repository
         .get_user(&mut tx, &username)
         .await
+        .map(|user| User {
+            id: Some(user.id),
+            username: user.username,
+        })
         .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::get_users_info;
+    use super::get_user_info_use_case;
     use crate::testing::actix::mock_state::{
         mock_actix_state, MockActixState, MockStateConfig,
     };
@@ -82,7 +87,7 @@ mod tests {
     #[actix_web::test]
     async fn should_error_when_username_missing() {
         let state = make_state_ok();
-        let result = get_users_info(state, None).await;
+        let result = get_user_info_use_case(state, None).await;
         assert!(result.is_err());
         let err = result.expect_err("should return error");
         assert_eq!(err.get_message(), "No username specified");
@@ -91,7 +96,7 @@ mod tests {
     #[actix_web::test]
     async fn should_error_on_db_connection_failure() {
         let state = make_state_db_error();
-        let result = get_users_info(state, Some("alice".to_string())).await;
+        let result = get_user_info_use_case(state, Some("alice".to_string())).await;
 
         let err = result.expect_err("should return error");
         assert!(err.get_message().contains("no rows returned"));
@@ -100,7 +105,7 @@ mod tests {
     #[actix_web::test]
     async fn should_error_on_repository_failure() {
         let state = make_state_repo_error();
-        let result = get_users_info(state, Some("bob".to_string())).await;
+        let result = get_user_info_use_case(state, Some("bob".to_string())).await;
 
         let err = result.expect_err("should return error");
         assert!(err.get_message().contains("no rows returned"));
@@ -109,7 +114,7 @@ mod tests {
     #[actix_web::test]
     async fn should_return_user() {
         let state = make_state_ok();
-        let result = get_users_info(state, Some("carol".to_string())).await;
+        let result = get_user_info_use_case(state, Some("carol".to_string())).await;
         let user = result.expect("Expected user");
         assert_eq!(user.username, "mock_user");
     }

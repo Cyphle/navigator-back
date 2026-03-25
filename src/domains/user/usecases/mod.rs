@@ -1,1 +1,1 @@
-pub mod get_users_info_use_case;
+pub mod get_user_info_use_case;

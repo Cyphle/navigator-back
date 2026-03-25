@@ -101,6 +101,7 @@ mod tests {
         };
         let mut tx = MockTransaction;
         let user = User {
+            id: Some(42),
             username: "ignored".to_string(),
         };
 
@@ -132,6 +133,7 @@ mod tests {
         };
         let mut tx = MockTransaction;
         let user = User {
+            id: Some(9),
             username: "ignored".to_string(),
         };
 

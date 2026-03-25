@@ -6,8 +6,8 @@ use log::debug;
 
 #[get("/families/{family_id}/shopping-lists/summary")]
 pub async fn get_shopping_list_summary_endpoint(
-    session: Session,
-    state: web::Data<ActixState>,
+    _session: Session,
+    _state: web::Data<ActixState>,
     family_id: web::Path<String>,
 ) -> impl Responder {
     debug!("[Controller] Get calendar summary of family {}", family_id);

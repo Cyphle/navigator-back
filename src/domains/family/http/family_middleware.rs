@@ -7,7 +7,7 @@ use crate::domains::family::domain::family_role::FamilyRole;
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
 use crate::domains::family::repositories::family_repository::FamilyRepository;
 use crate::domains::user::repositories::user_repository::UserRepository;
-use crate::security::token::{get_connected_username, get_username_from_session};
+use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};

@@ -1,16 +1,22 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::family::repositories::family_repository::FamilyRepository;
 use crate::domains::user::repositories::user_repository::UserRepository;
-use crate::domains::user::usecases::get_users_info_use_case::get_users_info;
-use crate::security::token::get_username_from_session;
+use crate::domains::user::usecases::get_user_info_use_case::get_user_info_use_case;
+use crate::security::token::{get_connected_username, get_username_from_session};
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 pub struct UserView {
+    pub id: i32,
     username: String,
+    // pub email: String,
+    // #[serde(rename = "firstName")]
+    // pub first_name: String,
+    // #[serde(rename = "lastName")]
+    // pub last_name: String,
 }
 
 pub async fn users_info_middleware<DB, U, F>(
@@ -24,22 +30,18 @@ where
 {
     debug!("[Middleware] users me");
 
-    let oidc_client = state.oidc_client.clone();
-    let username = match oidc_client {
-        Some(client) => {
-            let client = client.lock().unwrap();
-            get_username_from_session(&client, &session).await
-        }
-        None => None,
-    };
+    let username = get_connected_username(&session, &state).await;
 
     if username.is_none() {
         return HttpResponse::Unauthorized().finish();
     }
 
-    match get_users_info(state, username).await {
+    match get_user_info_use_case(state, username).await {
         Ok(user) => {
-            HttpResponse::Ok().json(UserView { username: user.username })
+            HttpResponse::Ok().json(UserView {
+                id: user.id.unwrap_or(-1),
+                username: user.username
+            })
         }
         Err(e) => {
             error!("Error getting families: {:?}", e.get_message());

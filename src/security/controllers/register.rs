@@ -46,6 +46,7 @@ pub async fn register(
 
     let request_payload = payload.into_inner();
     let user = User {
+        id: None,
         username: request_payload.username.to_owned(),
     };
 

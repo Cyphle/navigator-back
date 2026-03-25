@@ -1,4 +1,3 @@
-pub mod dashboard;
 pub mod family;
 pub mod user;
 pub mod common;
@@ -7,3 +6,4 @@ pub mod todo;
 pub mod recipe;
 pub mod shopping_list;
 pub mod meal;
+pub mod bank_account;

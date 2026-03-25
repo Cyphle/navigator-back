@@ -22,7 +22,6 @@ use crate::technical::technical_controller::{live, ready};
 use actix_session::storage::RedisSessionStore;
 use actix_web::cookie::Key;
 use actix_web::{web, App, HttpServer};
-use domains::dashboard::http::dashboard_controller::get_dashboard_endpoint;
 use domains::family::http::family_controller::{create_family_endpoint, get_families_endpoint};
 use domains::user::http::user_controller::users_info_endpoint;
 use domains::user::repositories::user_repository::SqlxUserRepository;

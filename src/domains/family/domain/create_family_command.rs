@@ -7,7 +7,7 @@ pub struct CreateFamilyCommand {
 }
 
 pub struct CreateFamilyMemberCommand {
-    pub username: String,
+    pub username_or_email: String,
     pub relation: FamilyRelation,
     pub is_admin: bool,
 }

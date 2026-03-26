@@ -6,7 +6,7 @@ pub struct MissingUsernameError;
 
 impl ApplicationError for MissingUsernameError {
     fn get_message(&self) -> String {
-        "No username specified".to_string()
+        "No username_or_email specified".to_string()
     }
 }
 

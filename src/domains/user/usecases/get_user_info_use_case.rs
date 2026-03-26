@@ -93,7 +93,7 @@ mod tests {
         let result = get_user_info_use_case(state, None).await;
         assert!(result.is_err());
         let err = result.expect_err("should return error");
-        assert_eq!(err.get_message(), "No username specified");
+        assert_eq!(err.get_message(), "No username_or_email specified");
     }
 
     #[actix_web::test]

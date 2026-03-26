@@ -85,7 +85,7 @@ where
                 name: request.name,
                 creator_relation: from_str(&request.creator_relation),
                 members: request.members.into_iter().map(|m| CreateFamilyMemberCommand {
-                    username: m.username,
+                    username_or_email: m.username_or_email,
                     relation: from_str(&m.relation),
                     is_admin: m.is_admin
                 }).collect()
@@ -192,7 +192,7 @@ mod tests {
                         async move {
                             session
                                 .insert("test_username", "mock_user")
-                                .expect("failed to set test username in session");
+                                .expect("failed to set test username_or_email in session");
                             super::create_family_middleware(
                                 session,
                                 state,
@@ -214,7 +214,7 @@ mod tests {
             .add_creator_relation("PARENT".to_string())
             .add_member(
                 CreateFamilyMemberRequest {
-                    username: "mock_user".to_string(),
+                    username_or_email: "mock_user".to_string(),
                     relation: "PARENT".to_string(),
                     is_admin: false
                 }

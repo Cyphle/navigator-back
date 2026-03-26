@@ -13,7 +13,7 @@ use crate::config::application::USER_SESSION_KEY;
 use crate::domains::family::repositories::family_repository::FamilyRepository;
 use crate::domains::user::repositories::user_repository::UserRepository;
 
-// To get the username from a Bearer token
+// To get the username_or_email from a Bearer token
 pub async fn get_username_from_bearer(
     client: &DiscoveredClient,
     bearer: &Bearer,
@@ -32,7 +32,7 @@ pub async fn get_username_from_bearer(
     }
 }
 
-// To get the username from the bearer token in session
+// To get the username_or_email from the bearer token in session
 pub async fn get_username_from_session(
     client: &DiscoveredClient,
     session: &actix_session::Session,
@@ -54,7 +54,7 @@ pub async fn get_username_from_session(
     }
 }
 
-// To get the connect username from session
+// To get the connect username_or_email from session
 pub async fn get_connected_username<DB, U, F>(session: &Session, state: &web::Data<ActixState<DB, U, F>>) -> Option<String>
 where
     DB: DbConnection,

@@ -56,7 +56,7 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
         let mut usernames: Vec<String> = command.members.iter().map(|m| m.username_or_email.clone()).collect();
         usernames.push(username.to_string());
 
-        let user_id_username: Vec<(i32, String)> = sqlx::query_as(
+        let user_id_username: Vec<(i32, String, String)> = sqlx::query_as(
             "SELECT id, username, email FROM users WHERE username = ANY($1) OR email = ANY($1)",
         )
             .bind(usernames)
@@ -65,8 +65,8 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
 
         let creator_id = &user_id_username
             .iter()
-            .find(|(_, uname)| uname == username)
-            .map(|(id, _)| *id)
+            .find(|(_, uname, _)| uname == username)
+            .map(|(id, _, _)| *id)
             .ok_or(Error::RowNotFound)?;
 
         let family_id: (i32,) = sqlx::query_as(
@@ -91,8 +91,8 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
         let (user_ids, relations, is_admins): (Vec<i32>, Vec<&str>, Vec<bool>) = command.members.iter()
             .map(|member| {
                 user_id_username.iter()
-                    .find(|(_, uname)| uname == &member.username_or_email)
-                    .map(|(id, _)| (*id, member.relation.as_str(), member.is_admin))
+                    .find(|(_, uname, email)| uname == &member.username_or_email || email == &member.username_or_email)
+                    .map(|(id, _, _)| (*id, member.relation.as_str(), member.is_admin))
                     .ok_or(Error::RowNotFound)
             })
             .collect::<Result<Vec<_>, _>>()?

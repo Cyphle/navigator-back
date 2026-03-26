@@ -42,12 +42,12 @@ impl FamilyRepository<MockTransaction> for MockFamilyRepository {
         &self,
         _tx: &mut MockTransaction,
         _username: &str,
-        command: CreateFamilyCommand,
-    ) -> Result<String, sqlx::Error> {
+        _command: &CreateFamilyCommand,
+    ) -> Result<i32, sqlx::Error> {
         if self.should_error {
             Err(sqlx::Error::RowNotFound)
         } else {
-            Ok(format!("Creation of family {} done", command.name))
+            Ok(1)
         }
     }
 }

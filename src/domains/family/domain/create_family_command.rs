@@ -1,6 +1,13 @@
-use crate::domains::family::domain::family_role::FamilyRole;
+use crate::domains::family::domain::family_relation::FamilyRelation;
 
 pub struct CreateFamilyCommand {
     pub name: String,
-    pub role: FamilyRole,
+    pub creator_relation: FamilyRelation,
+    pub members: Vec<CreateFamilyMemberCommand>
+}
+
+pub struct CreateFamilyMemberCommand {
+    pub username: String,
+    pub relation: FamilyRelation,
+    pub is_admin: bool,
 }

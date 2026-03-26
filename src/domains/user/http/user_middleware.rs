@@ -6,18 +6,7 @@ use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize)]
-pub struct UserView {
-    pub id: i32,
-    username: String,
-    pub email: String,
-    #[serde(rename = "firstName")]
-    pub first_name: String,
-    #[serde(rename = "lastName")]
-    pub last_name: String,
-}
+use crate::domains::user::http::user_views::UserView;
 
 pub async fn users_info_middleware<DB, U, F>(
     session: Session,

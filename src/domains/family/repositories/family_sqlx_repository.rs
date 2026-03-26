@@ -37,7 +37,7 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
             INNER JOIN family_members fm ON f.id = fm.family_id \
             INNER JOIN users u ON fm.user_id = u.id \
             WHERE u.username = $1 \
-            AND f.name = $2",
+            AND LOWER(f.name) = LOWER($2)",
         )
             .bind(username)
             .bind(name)
@@ -47,18 +47,34 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
         Ok(family)
     }
 
-    async fn create_family(&self, tx: &mut Transaction<'a, Postgres>, username: &str, command: CreateFamilyCommand) -> Result<String, Error> {
-        let family_id: (i32,) = sqlx::query_as(
-            "INSERT INTO families (name) VALUES ($1) RETURNING id",
+    async fn create_family(
+        &self,
+        tx: &mut Transaction<'a, Postgres>,
+        username: &str,
+        command: &CreateFamilyCommand
+    ) -> Result<i32, Error> {
+        let mut usernames: Vec<String> = command.members.iter().map(|m| m.username.clone()).collect();
+        usernames.push(username.to_string());
+
+        let user_id_username: Vec<(i32, String)> = sqlx::query_as(
+            "SELECT id, username FROM users WHERE username IN ANY($1)",
         )
-            .bind(&command.name)
-            .fetch_one(&mut **tx)
+            .bind(usernames)
+            .fetch_all(&mut **tx)
             .await?;
 
-        let user_id: (i32,) = sqlx::query_as(
-            "SELECT id FROM users WHERE username = $1 LIMIT 1",
+        let creator_id = &user_id_username
+            .iter()
+            .find(|(_, uname)| uname == username)
+            .map(|(id, _)| *id)
+            .ok_or(Error::RowNotFound)?;
+
+        let family_id: (i32,) = sqlx::query_as(
+            "INSERT INTO families (name, creator_id, active) VALUES ($1, $2, $2) RETURNING id",
         )
-            .bind(username)
+            .bind(&command.name)
+            .bind(creator_id)
+            .bind(true)
             .fetch_one(&mut **tx)
             .await?;
 
@@ -66,11 +82,32 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
             "INSERT INTO family_members (family_id, user_id, role) VALUES ($1, $2, $3)",
         )
             .bind(family_id.0)
-            .bind(user_id.0)
-            .bind(command.role.as_str())
+            .bind(creator_id)
+            .bind(command.creator_relation.as_str())
             .execute(&mut **tx)
             .await?;
 
-        Ok(format!("Creation of family {} for username {} done", command.name, username))
+        let (user_ids, relations): (Vec<i32>, Vec<&str>) = command.members.iter()
+            .map(|member| {
+                user_id_username.iter()
+                    .find(|(_, uname)| uname == &member.username)
+                    .map(|(id, _)| (*id, member.relation.as_str()))
+                    .ok_or(Error::RowNotFound)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .unzip();
+
+        sqlx::query(
+            "INSERT INTO family_members (family_id, user_id, role)
+     SELECT $1, * FROM UNNEST($2::int[], $3::text[])",
+        )
+            .bind(family_id.0)
+            .bind(&user_ids)
+            .bind(&relations)
+            .execute(&mut **tx)
+            .await?;
+
+        Ok(family_id.0)
     }
 }

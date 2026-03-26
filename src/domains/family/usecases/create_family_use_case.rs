@@ -39,10 +39,9 @@ where
             Err(Box::new(FamilyAlreadyExistsError { name: command.name.clone() }))
         }
         Err(sqlx::Error::RowNotFound) => {
-            let family_name = command.name.clone();
             if let Err(err) = state
                 .family_repository
-                .create_family(&mut tx, &username, command)
+                .create_family(&mut tx, &username, &command)
                 .await
             {
                 tx.rollback()
@@ -55,7 +54,14 @@ where
                 .await
                 .map_err(|e: sqlx::Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
 
-            Ok(Family { name: family_name })
+            let family_name = command.name.clone();
+            Ok(Family {
+                id: 0,
+                name: family_name,
+                creator_username: username,
+                members: vec![],
+                active: true,
+            })
         }
         Err(err) => {
             tx.rollback()
@@ -70,7 +76,7 @@ where
 mod tests {
     use crate::config::actix::ActixState;
     use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
-    use crate::domains::family::domain::family_role::FamilyRole;
+    use crate::domains::family::domain::family_relation::FamilyRelation;
     use crate::domains::family::repositories::family_entity::FamilyEntity;
     use crate::domains::family::usecases::create_family_use_case::create_family_use_case;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
@@ -128,7 +134,8 @@ mod tests {
             "john".to_string(),
             CreateFamilyCommand {
                 name: "Family C".to_string(),
-                role: FamilyRole::Owner,
+                creator_relation: FamilyRelation::Parent,
+                members: vec![],
             },
         )
             .await;
@@ -145,7 +152,8 @@ mod tests {
             "john".to_string(),
             CreateFamilyCommand {
                 name: "Family A".to_string(),
-                role: FamilyRole::Owner,
+                creator_relation: FamilyRelation::Parent,
+                members: vec![],
             },
         )
             .await;
@@ -162,7 +170,8 @@ mod tests {
             "john".to_string(),
             CreateFamilyCommand {
                 name: "Family C".to_string(),
-                role: FamilyRole::Owner,
+                creator_relation: FamilyRelation::Parent,
+                members: vec![],
             },
         )
             .await;

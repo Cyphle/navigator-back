@@ -1,10 +1,11 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
-use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
+use crate::domains::family::domain::create_family_command::{CreateFamilyCommand, CreateFamilyMemberCommand};
 use crate::domains::family::domain::family::Family;
-use crate::domains::family::domain::family_role::FamilyRole;
+use crate::domains::family::domain::family_relation::from_str;
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
+use crate::domains::family::repositories::family_entity::FamilyEntity;
 use crate::domains::family::repositories::family_repository::FamilyRepository;
 use crate::domains::user::repositories::user_repository::UserRepository;
 use crate::security::token::get_connected_username;
@@ -13,7 +14,6 @@ use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
 use serde::Serialize;
 use std::future::Future;
-use crate::domains::family::repositories::family_entity::FamilyEntity;
 
 #[derive(Serialize)]
 struct FamilyView {
@@ -83,7 +83,12 @@ where
             username,
             CreateFamilyCommand {
                 name: request.name,
-                role: FamilyRole::Owner,
+                creator_relation: from_str(&request.creator_relation),
+                members: request.members.into_iter().map(|m| CreateFamilyMemberCommand {
+                    username: m.username,
+                    relation: from_str(&m.relation),
+                    is_admin: m.is_admin
+                }).collect()
             },
         )
         .await
@@ -103,16 +108,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::domains::family::http::family_requests::CreateFamilyRequest;
+    use crate::domains::family::http::family_requests::{CreateFamilyMemberRequest, CreateFamilyRequest};
+    use crate::domains::family::repositories::family_entity::FamilyEntity;
+    use crate::domains::family::usecases::create_family_use_case::create_family_use_case;
     use crate::domains::family::usecases::get_families_use_case::get_families_use_case;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
+    use crate::testing::http::mock_requests::MockFamilyRequest;
     use crate::testing::repositories::mock_database::MockPoolPostgres;
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App};
     use spy::{spy, Spy};
     use std::sync::Arc;
-    use crate::domains::family::repositories::family_entity::FamilyEntity;
-    use crate::domains::family::usecases::create_family_use_case::create_family_use_case;
 
     #[actix_web::test]
     async fn should_call_get_families_application_layer() {
@@ -203,9 +209,17 @@ mod tests {
             ),
         ))
         .await;
-        let request = CreateFamilyRequest {
-            name: "My new family".to_string(),
-        };
+
+        let request = MockFamilyRequest::new("My new family".to_string())
+            .add_creator_relation("PARENT".to_string())
+            .add_member(
+                CreateFamilyMemberRequest {
+                    username: "mock_user".to_string(),
+                    relation: "PARENT".to_string(),
+                    is_admin: false
+                }
+            )
+            .build();
 
         // When
         let req = test::TestRequest::post()

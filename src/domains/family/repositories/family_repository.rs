@@ -21,6 +21,6 @@ pub trait FamilyRepository<Tx>: Send + Sync {
         &self,
         tx: &mut Tx,
         username: &str,
-        command: CreateFamilyCommand
-    ) -> Result<String, sqlx::Error>;
+        command: &CreateFamilyCommand
+    ) -> Result<i32, sqlx::Error>;
 }

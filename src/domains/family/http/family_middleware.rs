@@ -95,12 +95,12 @@ where
         {
             Ok(_) => HttpResponse::Ok().finish(),
             Err(e) => {
-                error!("Error getting families: {:?}", e.get_message());
+                error!("Error creating family: {:?}", e.get_message());
                 HttpResponse::InternalServerError().json(e.get_message())
             }
         },
         Err(e) => {
-            error!("Error getting families: {:?}", e.get_message());
+            error!("Error creating family: {:?}", e.get_message());
             HttpResponse::InternalServerError().json(e.get_message())
         }
     }

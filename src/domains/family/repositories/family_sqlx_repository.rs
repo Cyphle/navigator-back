@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use sqlx::{Error, Postgres, Transaction};
+use log::error;
 use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::repositories::family_entity::FamilyEntity;
 use crate::domains::family::repositories::family_repository::FamilyRepository;
@@ -65,9 +66,16 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
 
         let creator_id = &user_id_username
             .iter()
-            .find(|(_, uname, email)| uname.as_ref() == Some(&username.to_string()) || email.as_ref() == Some(&username.to_string()))
+            .find(|(_, uname, email)| {
+                let matches_uname = uname.as_ref().map_or(false, |u| u.to_lowercase() == username.to_lowercase());
+                let matches_email = email.as_ref().map_or(false, |e| e.to_lowercase() == username.to_lowercase());
+                matches_uname || matches_email
+            })
             .map(|(id, _, _)| *id)
-            .ok_or(Error::RowNotFound)?;
+            .ok_or_else(|| {
+                error!("Creator not found in users: {}", username);
+                Error::RowNotFound
+            })?;
 
         let family_id: (i32,) = sqlx::query_as(
             "INSERT INTO families (name, creator_id, active) VALUES ($1, $2, $3) RETURNING id",
@@ -88,12 +96,19 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
             .execute(&mut **tx)
             .await?;
 
-        let (user_ids, relations, is_admins): (Vec<i32>, Vec<&str>, Vec<bool>) = command.members.iter()
+        let (user_ids, relations, is_admins): (Vec<i32>, Vec<String>, Vec<bool>) = command.members.iter()
             .map(|member| {
                 user_id_username.iter()
-                    .find(|(_, uname, email)| uname.as_ref() == Some(&member.username_or_email.to_string()) || email.as_ref() == Some(&member.username_or_email))
-                    .map(|(id, _, _)| (*id, member.relation.as_str(), member.is_admin))
-                    .ok_or(Error::RowNotFound)
+                    .find(|(_, uname, email)| {
+                        let matches_uname = uname.as_ref().map_or(false, |u| u.to_lowercase() == member.username_or_email.to_lowercase());
+                        let matches_email = email.as_ref().map_or(false, |e| e.to_lowercase() == member.username_or_email.to_lowercase());
+                        matches_uname || matches_email
+                    })
+                    .map(|(id, _, _)| (*id, member.relation.as_str().to_string(), member.is_admin))
+                    .ok_or_else(|| {
+                        error!("Member not found in users: {}", member.username_or_email);
+                        Error::RowNotFound
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -104,16 +119,18 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
                 acc
             });
 
-        sqlx::query(
-            "INSERT INTO family_members (family_id, user_id, relation, is_admin)
-     SELECT $1, * FROM UNNEST($2::int[], $3::text[], $4::boolean[])",
-        )
-            .bind(family_id.0)
-            .bind(&user_ids)
-            .bind(&relations)
-            .bind(&is_admins)
-            .execute(&mut **tx)
-            .await?;
+        if !user_ids.is_empty() {
+            sqlx::query(
+                "INSERT INTO family_members (family_id, user_id, relation, is_admin)
+         SELECT $1, * FROM UNNEST($2::int[], $3::text[], $4::boolean[])",
+            )
+                .bind(family_id.0)
+                .bind(&user_ids)
+                .bind(&relations)
+                .bind(&is_admins)
+                .execute(&mut **tx)
+                .await?;
+        }
 
         Ok(family_id.0)
     }

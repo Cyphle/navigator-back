@@ -15,5 +15,6 @@ pub fn config(config: &LoggingConfig) {
             )
         })
         .filter(None, config.level.parse::<LevelFilter>().unwrap())
+        .filter(Some("sqlx"), LevelFilter::Debug)
         .init();
 }

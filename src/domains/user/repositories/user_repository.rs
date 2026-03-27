@@ -6,7 +6,6 @@ use crate::domains::user::domain::user::User;
 #[derive(Debug, FromRow)]
 pub struct UserEntity {
     pub id: i32,
-    #[sqlx(rename = "username_or_email")]
     pub username: String,
     pub email: Option<String>,
     pub first_name: String,
@@ -43,7 +42,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
         user: &User,
     ) -> Result<(u64, StatusCode), sqlx::Error> {
         let row: (i32,) = sqlx::query_as("
-            INSERT INTO users (username_or_email, email, first_name, last_name)
+            INSERT INTO users (username, email, first_name, last_name)
             VALUES ($1, $2, $3, $4) RETURNING id
         ")
             .bind(&user.username)
@@ -64,7 +63,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
     ) -> Result<UserEntity, sqlx::Error> {
         // Postgres uses positional parameters like $1
         let row = sqlx::query_as::<sqlx::Postgres, UserEntity>(
-            "SELECT id, username_or_email, email, first_name, last_name FROM users WHERE username_or_email = $1 LIMIT 1",
+            "SELECT id, username, email, first_name, last_name FROM users WHERE username = $1 LIMIT 1",
         )
             .bind(username)
             .fetch_one(&mut **tx)
@@ -81,11 +80,11 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
     ) -> Result<UserEntity, sqlx::Error> {
         let user = sqlx::query_as::<Postgres, UserEntity>(
             r#"
-        INSERT INTO users (username_or_email)
+        INSERT INTO users (username)
         VALUES ($1)
-        ON CONFLICT (username_or_email)
-        DO UPDATE SET username_or_email = EXCLUDED.username_or_email
-        RETURNING id, username_or_email
+        ON CONFLICT (username)
+        DO UPDATE SET username = EXCLUDED.username
+        RETURNING id, username
         "#
         )
             .bind(&user.username)

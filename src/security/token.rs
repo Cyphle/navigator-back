@@ -1,24 +1,24 @@
+use crate::config::actix::{ActixState, DbConnection};
+use crate::config::application::USER_SESSION_KEY;
+use crate::domains::family::repositories::family_repository::FamilyRepository;
+use crate::domains::user::repositories::user_repository::UserRepository;
+use crate::security::oidc::OidcAdminConfig;
 use actix_session::Session;
 use actix_web::web;
-use crate::security::oidc::OidcAdminConfig;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use openid::{
     Bearer, Client, Discovered, DiscoveredClient, StandardClaims, Token,
     TokenIntrospection,
 };
 use reqwest::Client as HttpClient;
 use serde::Deserialize;
-use crate::config::actix::{ActixState, DbConnection};
-use crate::config::application::USER_SESSION_KEY;
-use crate::domains::family::repositories::family_repository::FamilyRepository;
-use crate::domains::user::repositories::user_repository::UserRepository;
 
 // To get the username_or_email from a Bearer token
 pub async fn get_username_from_bearer(
     client: &DiscoveredClient,
     bearer: &Bearer,
 ) -> Option<String> {
-    info!("Bearer token found in session {:?}", bearer.clone());
+    debug!("Bearer token found in session");
     let token_wrapper: Token<StandardClaims> = Token::from(bearer.clone());
     match client
         .request_token_introspection::<TokenIntrospection<StandardClaims>>(&token_wrapper)

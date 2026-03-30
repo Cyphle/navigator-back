@@ -1,6 +1,5 @@
 use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
-use crate::domains::user::repositories::user_sqlx_repository::{SqlxUserRepository, UserRepository};
 use crate::security::oidc::OidcConfig;
 use openid::{Client, Discovered, StandardClaims};
 use sqlx::{Pool, Postgres, Transaction};
@@ -8,6 +7,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
+use crate::domains::user::domain::user_repository::UserRepository;
+use crate::domains::user::repositories::user_sqlx_repository::SqlxUserRepository;
 
 pub trait DbConnection: Send + Sync {
     type Tx<'a>: DbTransaction + Send

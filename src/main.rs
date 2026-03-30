@@ -17,7 +17,7 @@ use crate::domains::shopping_list::http::shopping_list_controller::get_shopping_
 use crate::domains::todo::http::todo_controller::get_todo_summary_endpoint;
 use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
-use crate::security::controllers::register::register;
+use domains::user::usecases::register_use_case::register;
 use crate::security::oidc::get_client;
 use crate::technical::technical_controller::{live, ready};
 use actix_session::storage::RedisSessionStore;

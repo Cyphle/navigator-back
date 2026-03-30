@@ -10,21 +10,7 @@ use serde::Serialize;
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
 use crate::domains::user::domain::user_repository::UserRepository;
-
-#[derive(Serialize)]
-struct KeycloakUser {
-    username: String,
-    email: String,
-    enabled: bool,
-    credentials: Vec<KeycloakCredential>,
-}
-
-#[derive(Serialize)]
-struct KeycloakCredential {
-    r#type: String,
-    value: String,
-    temporary: bool,
-}
+use crate::security::controllers::keycloak::{KeycloakCredential, KeycloakUser};
 
 #[derive(serde::Deserialize)]
 #[allow(dead_code)]

@@ -1,13 +1,14 @@
 use crate::domains::user::domain::user::User;
 use actix_web::http::StatusCode;
 use async_trait::async_trait;
+use crate::domains::user::domain::create_user_command::CreateUserCommand;
 
 #[async_trait]
 pub trait UserRepository<Tx>: Send + Sync {
     async fn create_user(
         &self,
         tx: &mut Tx,
-        user: &User,
+        user: &CreateUserCommand,
     ) -> Result<User, sqlx::Error>;
     async fn get_user(
         &self,

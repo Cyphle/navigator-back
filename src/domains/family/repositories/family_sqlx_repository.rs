@@ -252,7 +252,7 @@ impl SqlxFamilyRepository {
 
         Family {
             id: families[0].id,
-            name: families[0].name,
+            name: families[0].name.clone(),
             creator_username,
             members,
             active: families[0].active

@@ -40,19 +40,26 @@ mod tests {
     use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
     use crate::testing::repositories::mock_user_repository::MockUserRepository;
     use actix_web::web;
+    use crate::domains::family::domain::family::Family;
 
     fn make_state_ok() -> web::Data<MockActixState> {
         mock_actix_state(
             MockPoolPostgres,
             MockStateConfig {
                 families: Some(vec![
-                    FamilyEntity {
+                    Family {
                         id: 1,
                         name: "Family A".to_string(),
+                        creator_username: "johndoe".to_string(),
+                        members: vec![],
+                        active: true,
                     },
-                    FamilyEntity {
+                    Family {
                         id: 2,
                         name: "Family B".to_string(),
+                        creator_username: "johnsmith".to_string(),
+                        members: vec![],
+                        active: true,
                     },
                 ]),
                 ..MockStateConfig::default()

@@ -1,6 +1,6 @@
+use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
 use crate::domains::user::domain::user_repository::UserRepository;
-use actix_web::http::StatusCode;
 use async_trait::async_trait;
 use sqlx::{FromRow, Postgres, Transaction};
 
@@ -21,7 +21,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
     async fn create_user(
         &self,
         tx: &mut Transaction<'a, Postgres>,
-        user: &User,
+        user: &CreateUserCommand,
     ) -> Result<User, sqlx::Error> {
         let row: (i32,) = sqlx::query_as("
             INSERT INTO users (username, email, first_name, last_name)
@@ -35,7 +35,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
             .await?;
 
         Ok(User {
-            id: Some(row.0),
+            id: row.0,
             username: user.username.clone(),
             email: user.email.clone(),
             first_name: user.first_name.clone(),
@@ -58,7 +58,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
             .await?;
 
         Ok(User {
-            id: Some(row.id),
+            id: row.id,
             username: row.username,
             email: row.email.unwrap_or("".to_string()),
             first_name: row.first_name,
@@ -86,7 +86,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
             .await?;
 
         Ok(User {
-            id: Some(user.id),
+            id: user.id,
             username: user.username,
             email: user.email.unwrap_or("".to_string()),
             first_name: user.first_name,
@@ -112,16 +112,16 @@ mod tests {
             should_error: false,
         };
         let mut tx = MockTransaction;
-        let user = User {
-            id: Some(42),
+        let command = CreateUserCommand {
             username: "ignored".to_string(),
             email: "ignored".to_string(),
             first_name: "ignored".to_string(),
             last_name: "ignored".to_string(),
+            password: "ignored".to_string(),
         };
 
-        let result = repo.create_user(&mut tx, &user).await.unwrap();
-        assert_eq!(result.id.unwrap(), 42);
+        let result = repo.create_user(&mut tx, &command).await.unwrap();
+        assert_eq!(result.id, 42);
     }
 
     #[tokio::test]
@@ -137,7 +137,7 @@ mod tests {
         let mut tx = MockTransaction;
 
         let entity = repo.get_user(&mut tx, "ignored").await.unwrap();
-        assert_eq!(entity.id.unwrap(), 7);
+        assert_eq!(entity.id, 7);
         assert_eq!(entity.username, "bob");
     }
 
@@ -153,7 +153,7 @@ mod tests {
         };
         let mut tx = MockTransaction;
         let user = User {
-            id: Some(9),
+            id: 9,
             username: "ignored".to_string(),
             email: "ignored".to_string(),
             first_name: "ignored".to_string(),
@@ -161,7 +161,7 @@ mod tests {
         };
 
         let entity = repo.get_or_create_user(&mut tx, &user).await.unwrap();
-        assert_eq!(entity.id.unwrap(), 9);
+        assert_eq!(entity.id, 9);
         assert_eq!(entity.username, "johndoe");
     }
 }

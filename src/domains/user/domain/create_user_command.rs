@@ -1,8 +1,7 @@
-#[derive(Debug)]
-pub struct User {
-    pub id: i32,
+pub struct CreateUserCommand {
     pub username: String,
     pub email: String,
     pub first_name: String,
     pub last_name: String,
+    pub password: String
 }

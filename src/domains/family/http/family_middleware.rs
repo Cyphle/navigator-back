@@ -30,7 +30,7 @@ where
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
     GetFamilies: Fn(web::Data<ActixState<DB, U, F>>, String) -> Fut,
-    Fut: Future<Output = Result<Vec<FamilyEntity>, Box<dyn ApplicationError>>>,
+    Fut: Future<Output = Result<Vec<Family>, Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Getting families");
 
@@ -119,6 +119,7 @@ mod tests {
     use actix_web::{test, web, App};
     use spy::{spy, Spy};
     use std::sync::Arc;
+    use crate::domains::family::domain::family::Family;
 
     #[actix_web::test]
     async fn should_call_get_families_application_layer() {
@@ -127,25 +128,19 @@ mod tests {
             MockPoolPostgres,
             MockStateConfig {
                 families: Some(vec![
-                    FamilyEntity {
+                    Family {
                         id: 1,
                         name: "Family A".to_string(),
-                        creator_id: 1,
                         active: true,
-                        user_id: 1,
-                        username: "Johndoe".to_string(),
-                        relation: "PARENT".to_string(),
-                        is_admin: true
+                        creator_username: "johndoe".to_string(),
+                        members: vec![],
                     },
-                    FamilyEntity {
+                    Family {
                         id: 2,
                         name: "Family B".to_string(),
-                        creator_id: 2,
                         active: true,
-                        user_id: 2,
-                        username: "Johnsmith".to_string(),
-                        relation: "PARENT".to_string(),
-                        is_admin: true
+                        creator_username: "johnsmith".to_string(),
+                        members: vec![],
                     },
                 ]),
                 ..MockStateConfig::default()

@@ -1,12 +1,12 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::family::domain::family_repository::FamilyRepository;
+use crate::domains::user::domain::user_repository::UserRepository;
+use crate::domains::user::http::user_views::UserView;
 use crate::domains::user::usecases::get_user_info_use_case::get_user_info_use_case;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
-use crate::domains::user::domain::user_repository::UserRepository;
-use crate::domains::user::http::user_views::UserView;
 
 pub async fn users_info_middleware<DB, U, F>(
     session: Session,
@@ -28,7 +28,7 @@ where
     match get_user_info_use_case(state, username).await {
         Ok(user) => {
             HttpResponse::Ok().json(UserView {
-                id: user.id.unwrap_or(-1),
+                id: user.id,
                 username: user.username,
                 email: user.email,
                 first_name: user.first_name,
@@ -45,7 +45,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::users_info_middleware;
-    use crate::domains::family::repositories::family_entity::FamilyEntity;
+    use crate::domains::family::domain::family::Family;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
     use actix_web::http::StatusCode;
@@ -56,9 +56,12 @@ mod tests {
         let state = mock_actix_state(
             MockPoolPostgres,
             MockStateConfig {
-                families: Some(vec![FamilyEntity {
+                families: Some(vec![Family {
                     id: 1,
                     name: "Family A".to_string(),
+                    creator_username: "johndoe".to_string(),
+                    members: vec![],
+                    active: true
                 }]),
                 ..MockStateConfig::default()
             }

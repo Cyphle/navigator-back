@@ -37,7 +37,7 @@ where
 mod tests {
     use super::get_user_info_use_case;
     use crate::config::actix::ActixState;
-    use crate::domains::family::repositories::family_entity::FamilyEntity;
+    use crate::domains::family::domain::family::Family;
     use crate::testing::actix::mock_state::{
         mock_actix_state, MockActixState, MockStateConfig,
     };
@@ -50,9 +50,12 @@ mod tests {
         mock_actix_state(
             MockPoolPostgres,
             MockStateConfig {
-                families: Some(vec![FamilyEntity {
+                families: Some(vec![Family {
                     id: 1,
                     name: "Family A".to_string(),
+                    creator_username: "johndoe".to_string(),
+                    members: vec![],
+                    active: true
                 }]),
                 ..MockStateConfig::default()
             },

@@ -1,10 +1,10 @@
-use actix_web::http::StatusCode;
-use async_trait::async_trait;
-use sqlx::{Postgres, Transaction};
+use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
 use crate::domains::user::domain::user_repository::UserRepository;
 use crate::domains::user::repositories::user_sqlx_repository::UserEntity;
 use crate::testing::repositories::mock_database::MockTransaction;
+use async_trait::async_trait;
+use sqlx::{Postgres, Transaction};
 
 pub struct MockUserRepository {
     pub fixed_id: u64,
@@ -41,7 +41,7 @@ impl MockUserRepository {
 
     pub fn fixed_user(&self) -> User {
         User {
-            id: Some(self.fixed_id as i32),
+            id: self.fixed_id as i32,
             username: self.fixed_username.clone(),
             email: self.fixed_email.clone(),
             first_name: self.fixed_first_name.clone(),
@@ -55,7 +55,7 @@ impl UserRepository<MockTransaction> for MockUserRepository {
     async fn create_user(
         &self,
         _tx: &mut MockTransaction,
-        _user: &User,
+        _user: &CreateUserCommand,
     ) -> Result<User, sqlx::Error> {
         if self.should_error {
             Err(sqlx::Error::RowNotFound)
@@ -94,7 +94,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for MockUserRepository {
     async fn create_user(
         &self,
         _tx: &mut Transaction<'a, Postgres>,
-        _user: &User,
+        _user: &CreateUserCommand,
     ) -> Result<User, sqlx::Error> {
         if self.should_error {
             Err(sqlx::Error::RowNotFound)

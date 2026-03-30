@@ -5,10 +5,10 @@ use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::domain::family::Family;
 use crate::domains::family::domain::family_errors::FamilyAlreadyExistsError;
 use crate::domains::family::domain::family_repository::FamilyRepository;
+use crate::domains::user::domain::user_repository::UserRepository;
 use actix_web::web;
 use log::{error, info};
 use sqlx::Error;
-use crate::domains::user::domain::user_repository::UserRepository;
 
 pub async fn create_family_use_case<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
@@ -74,15 +74,14 @@ where
 mod tests {
     use crate::config::actix::ActixState;
     use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
+    use crate::domains::family::domain::family::Family;
     use crate::domains::family::domain::family_relation::FamilyRelation;
-    use crate::domains::family::repositories::family_entity::FamilyEntity;
     use crate::domains::family::usecases::create_family_use_case::create_family_use_case;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
     use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
     use crate::testing::repositories::mock_user_repository::MockUserRepository;
     use actix_web::web;
-    use crate::domains::family::domain::family::Family;
 
     fn make_state_ok() -> web::Data<MockActixState> {
         mock_actix_state(
@@ -154,7 +153,7 @@ mod tests {
         let state = make_state_ok();
         let result = create_family_use_case(
             state,
-            "john".to_string(),
+            "johndoe".to_string(),
             CreateFamilyCommand {
                 name: "Family A".to_string(),
                 creator_relation: FamilyRelation::Parent,

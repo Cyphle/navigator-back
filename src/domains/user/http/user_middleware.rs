@@ -1,11 +1,11 @@
 use crate::config::actix::{ActixState, DbConnection};
-use crate::domains::family::repositories::family_repository::FamilyRepository;
-use crate::domains::user::repositories::user_repository::UserRepository;
+use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::domains::user::usecases::get_user_info_use_case::get_user_info_use_case;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
+use crate::domains::user::domain::user_repository::UserRepository;
 use crate::domains::user::http::user_views::UserView;
 
 pub async fn users_info_middleware<DB, U, F>(

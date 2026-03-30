@@ -2,3 +2,4 @@ pub mod family;
 pub mod family_relation;
 pub mod family_errors;
 pub mod create_family_command;
+pub mod family_repository;

@@ -1,12 +1,12 @@
-use actix_web::web;
-use log::debug;
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::common::errors::repository_error::RepositoryError;
-use crate::domains::family::repositories::family_repository::FamilyRepository;
+use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::domains::user::domain::user::User;
-use crate::domains::user::repositories::user_repository::UserRepository;
+use crate::domains::user::domain::user_repository::UserRepository;
+use actix_web::web;
+use log::debug;
 
 pub async fn get_user_info_use_case<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
@@ -30,28 +30,21 @@ where
         .user_repository
         .get_user(&mut tx, &username)
         .await
-        .map(|user| User {
-            id: Some(user.id),
-            username: user.username,
-            email: user.email.unwrap_or("".to_string()),
-            first_name: user.first_name,
-            last_name: user.last_name,
-        })
         .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)
 }
 
 #[cfg(test)]
 mod tests {
     use super::get_user_info_use_case;
+    use crate::config::actix::ActixState;
+    use crate::domains::family::repositories::family_entity::FamilyEntity;
     use crate::testing::actix::mock_state::{
         mock_actix_state, MockActixState, MockStateConfig,
     };
-    use crate::config::actix::ActixState;
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
     use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
     use crate::testing::repositories::mock_user_repository::MockUserRepository;
     use actix_web::web;
-    use crate::domains::family::repositories::family_entity::FamilyEntity;
 
     fn make_state_ok() -> web::Data<MockActixState> {
         mock_actix_state(

@@ -1,7 +1,7 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::config::application::USER_SESSION_KEY;
-use crate::domains::family::repositories::family_repository::FamilyRepository;
-use crate::domains::user::repositories::user_repository::UserRepository;
+use crate::domains::family::domain::family_repository::FamilyRepository;
+use crate::domains::user::repositories::user_sqlx_repository::UserRepository;
 use crate::security::oidc::OidcAdminConfig;
 use actix_session::Session;
 use actix_web::web;

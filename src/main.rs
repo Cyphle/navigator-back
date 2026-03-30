@@ -25,7 +25,7 @@ use actix_web::cookie::Key;
 use actix_web::{web, App, HttpServer};
 use domains::family::http::family_controller::{create_family_endpoint, get_families_endpoint};
 use domains::user::http::user_controller::users_info_endpoint;
-use domains::user::repositories::user_repository::SqlxUserRepository;
+use domains::user::repositories::user_sqlx_repository::SqlxUserRepository;
 use log::info;
 use std::sync::{Arc, Mutex};
 

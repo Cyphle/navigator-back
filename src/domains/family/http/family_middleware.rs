@@ -6,14 +6,14 @@ use crate::domains::family::domain::family::Family;
 use crate::domains::family::domain::family_relation::from_str;
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
 use crate::domains::family::repositories::family_entity::FamilyEntity;
-use crate::domains::family::repositories::family_repository::FamilyRepository;
-use crate::domains::user::repositories::user_repository::UserRepository;
+use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
 use serde::Serialize;
 use std::future::Future;
+use crate::domains::user::domain::user_repository::UserRepository;
 
 #[derive(Serialize)]
 struct FamilyView {

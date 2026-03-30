@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::repositories::family_entity::FamilyEntity;
-use crate::domains::family::repositories::family_repository::FamilyRepository;
+use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::testing::repositories::mock_database::MockTransaction;
 
 pub struct MockFamilyRepository {

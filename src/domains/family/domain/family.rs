@@ -2,7 +2,7 @@ use crate::domains::family::domain::family_relation::FamilyRelation;
 
 #[derive(Debug)]
 pub struct Family {
-    pub id: u32,
+    pub id: i32,
     pub name: String,
     pub creator_username: String,
     pub members: Vec<FamilyMember>,

@@ -23,17 +23,17 @@ impl FamilyRelation {
             FamilyRelation::Other => "OTHER"
         }
     }
-}
-
-pub fn from_str(relation: &String) -> FamilyRelation {
-    match relation.as_str() {
-        "PARENT" => FamilyRelation::Parent,
-        "GRAND_PARENT" => FamilyRelation::GrandParent,
-        "CHILD" => FamilyRelation::Child,
-        "UNDLE" => FamilyRelation::Uncle,
-        "AUNT" => FamilyRelation::Aunt,
-        "SISTER" => FamilyRelation::Sister,
-        "BROTHER" => FamilyRelation::Brother,
-        _ => FamilyRelation::Other
+    
+    pub fn from_str(relation: &String) -> FamilyRelation {
+        match relation.as_str() {
+            "PARENT" => FamilyRelation::Parent,
+            "GRAND_PARENT" => FamilyRelation::GrandParent,
+            "CHILD" => FamilyRelation::Child,
+            "UNDLE" => FamilyRelation::Uncle,
+            "AUNT" => FamilyRelation::Aunt,
+            "SISTER" => FamilyRelation::Sister,
+            "BROTHER" => FamilyRelation::Brother,
+            _ => FamilyRelation::Other
+        }
     }
 }

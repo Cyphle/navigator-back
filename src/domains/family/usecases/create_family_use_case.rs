@@ -4,10 +4,11 @@ use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::domain::family::Family;
 use crate::domains::family::domain::family_errors::FamilyAlreadyExistsError;
-use crate::domains::family::repositories::family_repository::FamilyRepository;
-use crate::domains::user::repositories::user_repository::UserRepository;
+use crate::domains::family::domain::family_repository::FamilyRepository;
 use actix_web::web;
 use log::{error, info};
+use sqlx::Error;
+use crate::domains::user::domain::user_repository::UserRepository;
 
 pub async fn create_family_use_case<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
@@ -39,29 +40,26 @@ where
             Err(Box::new(FamilyAlreadyExistsError { name: command.name.clone() }))
         }
         Err(sqlx::Error::RowNotFound) => {
-            if let Err(err) = state
+            let result = state
                 .family_repository
                 .create_family(&mut tx, &username, &command)
-                .await
-            {
-                tx.rollback()
-                    .await
-                    .map_err(|e: sqlx::Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-                return Err(Box::new(RepositoryError { error: err.to_string() }));
+                .await;
+
+            match result {
+                Ok(family) => {
+                    tx.commit()
+                        .await
+                        .map_err(|e: Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+
+                    Ok(family)
+                }
+                Err(error) => {
+                    tx.rollback()
+                        .await
+                        .map_err(|e: sqlx::Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+                    Err(Box::new(RepositoryError { error: error.to_string() }))
+                }
             }
-
-            tx.commit()
-                .await
-                .map_err(|e: sqlx::Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-
-            let family_name = command.name.clone();
-            Ok(Family {
-                id: 0,
-                name: family_name,
-                creator_username: username,
-                members: vec![],
-                active: true,
-            })
         }
         Err(err) => {
             tx.rollback()

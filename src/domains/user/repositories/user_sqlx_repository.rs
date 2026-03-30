@@ -1,7 +1,8 @@
+use crate::domains::user::domain::user::User;
+use crate::domains::user::domain::user_repository::UserRepository;
 use actix_web::http::StatusCode;
 use async_trait::async_trait;
 use sqlx::{FromRow, Postgres, Transaction};
-use crate::domains::user::domain::user::User;
 
 #[derive(Debug, FromRow)]
 pub struct UserEntity {
@@ -10,25 +11,6 @@ pub struct UserEntity {
     pub email: Option<String>,
     pub first_name: String,
     pub last_name: String,
-}
-
-#[async_trait]
-pub trait UserRepository<Tx>: Send + Sync {
-    async fn create_user(
-        &self,
-        tx: &mut Tx,
-        user: &User,
-    ) -> Result<(u64, StatusCode), sqlx::Error>;
-    async fn get_user(
-        &self,
-        tx: &mut Tx,
-        username: &str,
-    ) -> Result<UserEntity, sqlx::Error>;
-    async fn get_or_create_user(
-        &self,
-        tx: &mut Tx,
-        user: &User,
-    ) -> Result<UserEntity, sqlx::Error>;
 }
 
 pub struct SqlxUserRepository;
@@ -60,16 +42,22 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
         &self,
         tx: &mut Transaction<'a, Postgres>,
         username: &str,
-    ) -> Result<UserEntity, sqlx::Error> {
+    ) -> Result<User, sqlx::Error> {
         // Postgres uses positional parameters like $1
-        let row = sqlx::query_as::<sqlx::Postgres, UserEntity>(
+        let row = sqlx::query_as::<Postgres, UserEntity>(
             "SELECT id, username, email, first_name, last_name FROM users WHERE username = $1 LIMIT 1",
         )
             .bind(username)
             .fetch_one(&mut **tx)
             .await?;
 
-        Ok(row)
+        Ok(User {
+            id: Some(row.id),
+            username: row.username,
+            email: row.email.unwrap_or("".to_string()),
+            first_name: row.first_name,
+            last_name: row.last_name,
+        })
     }
 
     // Upsert user
@@ -77,7 +65,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
         &self,
         tx: &mut Transaction<'a, Postgres>,
         user: &User,
-    ) -> Result<UserEntity, sqlx::Error> {
+    ) -> Result<User, sqlx::Error> {
         let user = sqlx::query_as::<Postgres, UserEntity>(
             r#"
         INSERT INTO users (username)
@@ -91,7 +79,13 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
             .fetch_one(&mut **tx)
             .await?;
 
-        Ok(user)
+        Ok(User {
+            id: Some(user.id),
+            username: user.username,
+            email: user.email.unwrap_or("".to_string()),
+            first_name: user.first_name,
+            last_name: user.last_name,
+        })
     }
 }
 

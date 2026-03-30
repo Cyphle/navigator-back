@@ -1,15 +1,15 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
-use crate::domains::family::repositories::family_entity::FamilyEntity;
-use crate::domains::family::repositories::family_repository::FamilyRepository;
-use crate::domains::user::repositories::user_repository::UserRepository;
+use crate::domains::family::domain::family::Family;
+use crate::domains::family::domain::family_repository::FamilyRepository;
+use crate::domains::user::domain::user_repository::UserRepository;
 use actix_web::web;
 
 pub async fn get_families_use_case<DB, U, F>(
     state: web::Data<ActixState<DB, U, F>>,
     username: String,
-) -> Result<Vec<FamilyEntity>, Box<dyn ApplicationError>>
+) -> Result<Vec<Family>, Box<dyn ApplicationError>>
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,

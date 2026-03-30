@@ -1,7 +1,6 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::config::application::USER_SESSION_KEY;
 use crate::domains::family::domain::family_repository::FamilyRepository;
-use crate::domains::user::repositories::user_sqlx_repository::UserRepository;
 use crate::security::oidc::OidcAdminConfig;
 use actix_session::Session;
 use actix_web::web;
@@ -12,6 +11,7 @@ use openid::{
 };
 use reqwest::Client as HttpClient;
 use serde::Deserialize;
+use crate::domains::user::domain::user_repository::UserRepository;
 
 // To get the username_or_email from a Bearer token
 pub async fn get_username_from_bearer(

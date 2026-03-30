@@ -8,7 +8,7 @@ use log::{error, info};
 use reqwest::Client as HttpClient;
 use serde::Serialize;
 use crate::domains::user::domain::user::User;
-use crate::domains::user::repositories::user_sqlx_repository::UserRepository;
+use crate::domains::user::domain::user_repository::UserRepository;
 
 #[derive(Serialize)]
 struct KeycloakUser {

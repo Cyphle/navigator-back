@@ -22,7 +22,7 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
         &self,
         tx: &mut Transaction<'a, Postgres>,
         user: &User,
-    ) -> Result<(u64, StatusCode), sqlx::Error> {
+    ) -> Result<User, sqlx::Error> {
         let row: (i32,) = sqlx::query_as("
             INSERT INTO users (username, email, first_name, last_name)
             VALUES ($1, $2, $3, $4) RETURNING id
@@ -34,7 +34,13 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
             .fetch_one(&mut **tx)
             .await?;
 
-        Ok((row.0 as u64, StatusCode::CREATED))
+        Ok(User {
+            id: Some(row.0),
+            username: user.username.clone(),
+            email: user.email.clone(),
+            first_name: user.first_name.clone(),
+            last_name: user.last_name.clone(),
+        })
     }
 
     // Get user
@@ -115,8 +121,7 @@ mod tests {
         };
 
         let result = repo.create_user(&mut tx, &user).await.unwrap();
-        assert_eq!(result.0, 42);
-        assert_eq!(result.1, StatusCode::CREATED);
+        assert_eq!(result.id.unwrap(), 42);
     }
 
     #[tokio::test]
@@ -132,7 +137,7 @@ mod tests {
         let mut tx = MockTransaction;
 
         let entity = repo.get_user(&mut tx, "ignored").await.unwrap();
-        assert_eq!(entity.id, 7);
+        assert_eq!(entity.id.unwrap(), 7);
         assert_eq!(entity.username, "bob");
     }
 
@@ -156,7 +161,7 @@ mod tests {
         };
 
         let entity = repo.get_or_create_user(&mut tx, &user).await.unwrap();
-        assert_eq!(entity.id, 9);
+        assert_eq!(entity.id.unwrap(), 9);
         assert_eq!(entity.username, "johndoe");
     }
 }

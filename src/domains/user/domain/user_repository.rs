@@ -8,7 +8,7 @@ pub trait UserRepository<Tx>: Send + Sync {
         &self,
         tx: &mut Tx,
         user: &User,
-    ) -> Result<(u64, StatusCode), sqlx::Error>;
+    ) -> Result<User, sqlx::Error>;
     async fn get_user(
         &self,
         tx: &mut Tx,

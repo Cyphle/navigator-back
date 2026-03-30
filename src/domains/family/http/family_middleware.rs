@@ -3,7 +3,6 @@ use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::family::domain::create_family_command::{CreateFamilyCommand, CreateFamilyMemberCommand};
 use crate::domains::family::domain::family::Family;
-use crate::domains::family::domain::family_relation::from_str;
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
 use crate::domains::family::repositories::family_entity::FamilyEntity;
 use crate::domains::family::domain::family_repository::FamilyRepository;
@@ -13,6 +12,7 @@ use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
 use serde::Serialize;
 use std::future::Future;
+use crate::domains::family::domain::family_relation::FamilyRelation;
 use crate::domains::user::domain::user_repository::UserRepository;
 
 #[derive(Serialize)]
@@ -83,10 +83,10 @@ where
             username,
             CreateFamilyCommand {
                 name: request.name,
-                creator_relation: from_str(&request.creator_relation),
+                creator_relation: FamilyRelation::from_str(&request.creator_relation),
                 members: request.members.into_iter().map(|m| CreateFamilyMemberCommand {
                     username_or_email: m.username_or_email,
-                    relation: from_str(&m.relation),
+                    relation: FamilyRelation::from_str(&m.relation),
                     is_admin: m.is_admin
                 }).collect()
             },
@@ -130,10 +130,22 @@ mod tests {
                     FamilyEntity {
                         id: 1,
                         name: "Family A".to_string(),
+                        creator_id: 1,
+                        active: true,
+                        user_id: 1,
+                        username: "Johndoe".to_string(),
+                        relation: "PARENT".to_string(),
+                        is_admin: true
                     },
                     FamilyEntity {
                         id: 2,
                         name: "Family B".to_string(),
+                        creator_id: 2,
+                        active: true,
+                        user_id: 2,
+                        username: "Johnsmith".to_string(),
+                        relation: "PARENT".to_string(),
+                        is_admin: true
                     },
                 ]),
                 ..MockStateConfig::default()

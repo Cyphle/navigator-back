@@ -1,11 +1,11 @@
-use async_trait::async_trait;
 use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
-use crate::domains::family::repositories::family_entity::FamilyEntity;
+use crate::domains::family::domain::family::Family;
 use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::testing::repositories::mock_database::MockTransaction;
+use async_trait::async_trait;
 
 pub struct MockFamilyRepository {
-    pub families: Vec<FamilyEntity>,
+    pub families: Vec<Family>,
     pub should_error: bool,
 }
 
@@ -15,7 +15,7 @@ impl FamilyRepository<MockTransaction> for MockFamilyRepository {
         &self,
         _tx: &mut MockTransaction,
         _username: &str,
-    ) -> Result<Vec<FamilyEntity>, sqlx::Error> {
+    ) -> Result<Vec<Family>, sqlx::Error> {
         if self.should_error {
             Err(sqlx::Error::RowNotFound)
         } else {
@@ -28,7 +28,7 @@ impl FamilyRepository<MockTransaction> for MockFamilyRepository {
         _tx: &mut MockTransaction,
         _username: &str,
         _name: &str,
-    ) -> Result<FamilyEntity, sqlx::Error> {
+    ) -> Result<Family, sqlx::Error> {
         if self.should_error {
             Err(sqlx::Error::RowNotFound)
         } else if self.families.is_empty() {
@@ -43,11 +43,11 @@ impl FamilyRepository<MockTransaction> for MockFamilyRepository {
         _tx: &mut MockTransaction,
         _username: &str,
         _command: &CreateFamilyCommand,
-    ) -> Result<i32, sqlx::Error> {
+    ) -> Result<Family, sqlx::Error> {
         if self.should_error {
             Err(sqlx::Error::RowNotFound)
         } else {
-            Ok(1)
+            Ok(self.families[0].clone())
         }
     }
 }

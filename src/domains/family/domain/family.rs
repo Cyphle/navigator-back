@@ -1,6 +1,6 @@
 use crate::domains::family::domain::family_relation::FamilyRelation;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Family {
     pub id: i32,
     pub name: String,
@@ -9,7 +9,7 @@ pub struct Family {
     pub active: bool
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FamilyMember {
     pub username: String,
     pub relation: FamilyRelation,

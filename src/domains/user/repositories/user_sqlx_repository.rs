@@ -74,14 +74,17 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
     ) -> Result<User, sqlx::Error> {
         let user = sqlx::query_as::<Postgres, UserEntity>(
             r#"
-        INSERT INTO users (username)
-        VALUES ($1)
+        INSERT INTO users (username, email, first_name, last_name)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (username)
         DO UPDATE SET username = EXCLUDED.username
-        RETURNING id, username
+        RETURNING id, username, email, first_name, last_name
         "#
         )
             .bind(&user.username)
+            .bind(&user.email)
+            .bind(&user.first_name)
+            .bind(&user.last_name)
             .fetch_one(&mut **tx)
             .await?;
 
@@ -98,70 +101,68 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::repositories::mock_database::MockTransaction;
-    use crate::testing::repositories::mock_user_repository::MockUserRepository;
 
-    #[tokio::test]
-    async fn mock_repo_create_user_returns_fixed_values() {
-        let repo = MockUserRepository {
-            fixed_id: 42,
-            fixed_username: "alice".to_string(),
-            fixed_email: "alice@example.com".to_string(),
-            fixed_first_name: "Alice".to_string(),
-            fixed_last_name: "Alicia".to_string(),
-            should_error: false,
-        };
-        let mut tx = MockTransaction;
+    #[sqlx_testcontainers::test]
+    async fn test_create_user(mut conn: sqlx::PgConnection) {
+        use sqlx::Connection;
+        let repo = SqlxUserRepository;
+        let mut tx = conn.begin().await.unwrap();
+
         let command = CreateUserCommand {
-            username: "ignored".to_string(),
-            email: "ignored".to_string(),
-            first_name: "ignored".to_string(),
-            last_name: "ignored".to_string(),
-            password: "ignored".to_string(),
+            username: "alice".to_string(),
+            email: "alice@example.com".to_string(),
+            first_name: "Alice".to_string(),
+            last_name: "Alicia".to_string(),
+            password: "password123".to_string(),
         };
 
         let result = repo.create_user(&mut tx, &command).await.unwrap();
-        assert_eq!(result.id, 42);
+        assert_eq!(result.username, "alice");
+        assert_eq!(result.email, "alice@example.com");
     }
 
-    #[tokio::test]
-    async fn mock_repo_get_user_returns_fixed_entity() {
-        let repo = MockUserRepository {
-            fixed_id: 7,
-            fixed_username: "bob".to_string(),
-            fixed_email: "bob@example.com".to_string(),
-            fixed_first_name: "Bob".to_string(),
-            fixed_last_name: "Bobby".to_string(),
-            should_error: false,
-        };
-        let mut tx = MockTransaction;
+    #[sqlx_testcontainers::test]
+    async fn test_get_user(mut conn: sqlx::PgConnection) {
+        use sqlx::Connection;
+        let repo = SqlxUserRepository;
+        let mut tx = conn.begin().await.unwrap();
 
-        let entity = repo.get_user(&mut tx, "ignored").await.unwrap();
-        assert_eq!(entity.id, 7);
+        // Seed data
+        sqlx::query("INSERT INTO users (username, email, first_name, last_name) VALUES ($1, $2, $3, $4)")
+            .bind("bob")
+            .bind("bob@example.com")
+            .bind("Bob")
+            .bind("Bobby")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+
+        let entity = repo.get_user(&mut tx, "bob").await.unwrap();
         assert_eq!(entity.username, "bob");
+        assert_eq!(entity.email, "bob@example.com");
     }
 
-    #[tokio::test]
-    async fn mock_repo_get_or_create_returns_fixed_entity() {
-        let repo = MockUserRepository {
-            fixed_id: 9,
-            fixed_username: "johndoe".to_string(),
-            fixed_email: "johndoe@example.com".to_string(),
-            fixed_first_name: "John".to_string(),
-            fixed_last_name: "Doe".to_string(),
-            should_error: false,
-        };
-        let mut tx = MockTransaction;
+    #[sqlx_testcontainers::test]
+    async fn test_get_or_create_user(mut conn: sqlx::PgConnection) {
+        use sqlx::Connection;
+        let repo = SqlxUserRepository;
+        let mut tx = conn.begin().await.unwrap();
+
         let user = User {
-            id: 9,
-            username: "ignored".to_string(),
-            email: "ignored".to_string(),
-            first_name: "ignored".to_string(),
-            last_name: "ignored".to_string(),
+            id: 0,
+            username: "johndoe".to_string(),
+            email: "".to_string(),
+            first_name: "".to_string(),
+            last_name: "".to_string(),
         };
 
+        // First call should create
         let entity = repo.get_or_create_user(&mut tx, &user).await.unwrap();
-        assert_eq!(entity.id, 9);
         assert_eq!(entity.username, "johndoe");
+
+        // Second call should return existing
+        let entity2 = repo.get_or_create_user(&mut tx, &user).await.unwrap();
+        assert_eq!(entity2.id, entity.id);
+        assert_eq!(entity2.username, "johndoe");
     }
 }

@@ -259,3 +259,95 @@ impl SqlxFamilyRepository {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::Connection;
+    use crate::domains::family::domain::create_family_command::CreateFamilyMemberCommand;
+
+    async fn create_user(tx: &mut Transaction<'_, Postgres>, username: &str, email: &str) -> i32 {
+        let row: (i32,) = sqlx::query_as("INSERT INTO users (username, email, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING id")
+            .bind(username)
+            .bind(email)
+            .bind("First")
+            .bind("Last")
+            .fetch_one(&mut **tx)
+            .await
+            .unwrap();
+        row.0
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_create_family(mut conn: sqlx::PgConnection) {
+        let repo = SqlxFamilyRepository;
+        let mut tx = conn.begin().await.unwrap();
+
+        // Ensure creator exists
+        create_user(&mut tx, "alice", "alice@example.com").await;
+
+        let command = CreateFamilyCommand {
+            name: "The Alices".to_string(),
+            creator_relation: FamilyRelation::Parent,
+            members: vec![
+                CreateFamilyMemberCommand {
+                    username_or_email: "bob@example.com".to_string(),
+                    relation: FamilyRelation::Child,
+                    is_admin: false,
+                }
+            ],
+        };
+
+        let family = repo.create_family(&mut tx, "alice", &command).await.unwrap();
+        assert_eq!(family.name, "The Alices");
+        assert_eq!(family.creator_username, "alice");
+        assert_eq!(family.members.len(), 2); // Alice + Bob
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_get_families_for(mut conn: sqlx::PgConnection) {
+        let repo = SqlxFamilyRepository;
+        let mut tx = conn.begin().await.unwrap();
+
+        let alice_id = create_user(&mut tx, "alice", "alice@example.com").await;
+        
+        // Manual seed
+        let family_id: (i32,) = sqlx::query_as("INSERT INTO families (name, creator_id) VALUES ($1, $2) RETURNING id")
+            .bind("Alice Family")
+            .bind(alice_id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        
+        sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, $3, $4)")
+            .bind(family_id.0)
+            .bind(alice_id)
+            .bind("PARENT")
+            .bind(true)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+
+        let families = repo.get_families_for(&mut tx, "alice").await.unwrap();
+        assert_eq!(families.len(), 1);
+        assert_eq!(families[0].name, "Alice Family");
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_get_family_by_name(mut conn: sqlx::PgConnection) {
+        let repo = SqlxFamilyRepository;
+        let mut tx = conn.begin().await.unwrap();
+
+        let alice_id = create_user(&mut tx, "alice", "alice@example.com").await;
+        
+        let command = CreateFamilyCommand {
+            name: "Alice Club".to_string(),
+            creator_relation: FamilyRelation::Other,
+            members: vec![],
+        };
+        repo.create_family(&mut tx, "alice", &command).await.unwrap();
+
+        let family = repo.get_family_by_name(&mut tx, "alice", "alice club").await.unwrap();
+        assert_eq!(family.name, "Alice Club");
+    }
+}

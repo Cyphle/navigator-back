@@ -70,7 +70,7 @@ async fn main() -> std::io::Result<()> {
 
                         db_connection: connection,
                         user_repository: Arc::new(user_repository),
-                        family_repository: Arc::new(family_repository)
+                        family_repository: Arc::new(family_repository),
                     });
 
                     info!("Starting Actix server...");

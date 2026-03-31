@@ -7,7 +7,7 @@ use crate::testing::security::oidc::dummy_oidc_config;
 use actix_web::web;
 use std::sync::Arc;
 
-pub type MockActixState = ActixState<MockPoolPostgres, MockUserRepository, MockFamilyRepository>;
+pub type MockActixState = ActixState<MockPoolPostgres>;
 
 #[derive(Default)]
 pub struct MockStateConfig {
@@ -17,9 +17,9 @@ pub struct MockStateConfig {
 }
 
 pub fn mock_actix_state<DB>(
-    db_connection: DB,
+    db_connection: MockPoolPostgres,
     config: MockStateConfig,
-) -> web::Data<ActixState<DB, MockUserRepository, MockFamilyRepository>>
+) -> web::Data<ActixState>
 where
     for<'a> DB: DbConnection<Tx<'a> = crate::testing::repositories::mock_database::MockTransaction>
         + 'static,

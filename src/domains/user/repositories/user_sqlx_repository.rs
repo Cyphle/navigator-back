@@ -1,8 +1,8 @@
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
-use crate::domains::user::domain::user_repository::UserRepository;
+use crate::domains::user::domain::user_repository::{DynUserRepository, UserRepository};
 use async_trait::async_trait;
-use sqlx::{FromRow, Postgres, Transaction};
+use sqlx::{FromRow, PgConnection, Postgres, Transaction};
 
 #[derive(Debug, FromRow)]
 pub struct UserEntity {
@@ -15,23 +15,19 @@ pub struct UserEntity {
 
 pub struct SqlxUserRepository;
 
-#[async_trait]
-impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
-    // Create user
-    async fn create_user(
-        &self,
-        tx: &mut Transaction<'a, Postgres>,
-        user: &CreateUserCommand,
+impl SqlxUserRepository {
+    async fn create_user_inner<'e, E: sqlx::Executor<'e, Database = Postgres>>(
+        &self, executor: E, user: &CreateUserCommand,
     ) -> Result<User, sqlx::Error> {
-        let row: (i32,) = sqlx::query_as("
-            INSERT INTO users (username, email, first_name, last_name)
-            VALUES ($1, $2, $3, $4) RETURNING id
-        ")
+        let row: (i32,) = sqlx::query_as(
+            "INSERT INTO users (username, email, first_name, last_name)
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
             .bind(&user.username)
             .bind(&user.email)
             .bind(&user.first_name)
             .bind(&user.last_name)
-            .fetch_one(&mut **tx)
+            .fetch_one(executor)
             .await?;
 
         Ok(User {
@@ -43,58 +39,77 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
         })
     }
 
-    // Get user
-    async fn get_user(
-        &self,
-        tx: &mut Transaction<'a, Postgres>,
-        username: &str,
+    async fn get_user_inner<'e, E: sqlx::Executor<'e, Database = Postgres>>(
+        &self, executor: E, username: &str,
     ) -> Result<User, sqlx::Error> {
-        // Postgres uses positional parameters like $1
         let row = sqlx::query_as::<Postgres, UserEntity>(
             "SELECT id, username, email, first_name, last_name FROM users WHERE username = $1 LIMIT 1",
         )
             .bind(username)
-            .fetch_one(&mut **tx)
+            .fetch_one(executor)
             .await?;
 
         Ok(User {
             id: row.id,
             username: row.username,
-            email: row.email.unwrap_or("".to_string()),
+            email: row.email.unwrap_or_default(),
             first_name: row.first_name,
             last_name: row.last_name,
         })
     }
 
-    // Upsert user
-    async fn get_or_create_user(
-        &self,
-        tx: &mut Transaction<'a, Postgres>,
-        user: &User,
+    async fn get_or_create_user_inner<'e, E: sqlx::Executor<'e, Database = Postgres>>(
+        &self, executor: E, user: &User,
     ) -> Result<User, sqlx::Error> {
-        let user = sqlx::query_as::<Postgres, UserEntity>(
-            r#"
-        INSERT INTO users (username, email, first_name, last_name)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (username)
-        DO UPDATE SET username = EXCLUDED.username
-        RETURNING id, username, email, first_name, last_name
-        "#
+        let row = sqlx::query_as::<Postgres, UserEntity>(
+            r#"INSERT INTO users (username, email, first_name, last_name)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (username)
+               DO UPDATE SET username = EXCLUDED.username
+               RETURNING id, username, email, first_name, last_name"#,
         )
             .bind(&user.username)
             .bind(&user.email)
             .bind(&user.first_name)
             .bind(&user.last_name)
-            .fetch_one(&mut **tx)
+            .fetch_one(executor)
             .await?;
 
         Ok(User {
-            id: user.id,
-            username: user.username,
-            email: user.email.unwrap_or("".to_string()),
-            first_name: user.first_name,
-            last_name: user.last_name,
+            id: row.id,
+            username: row.username,
+            email: row.email.unwrap_or_default(),
+            first_name: row.first_name,
+            last_name: row.last_name,
         })
+    }
+}
+
+// Trait générique — pour les tests d'intégration
+#[async_trait]
+impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
+    async fn create_user(&self, tx: &mut Transaction<'a, Postgres>, user: &CreateUserCommand) -> Result<User, sqlx::Error> {
+        self.create_user_inner(&mut **tx, user).await
+    }
+    async fn get_user(&self, tx: &mut Transaction<'a, Postgres>, username: &str) -> Result<User, sqlx::Error> {
+        self.get_user_inner(&mut **tx, username).await
+    }
+    async fn get_or_create_user(&self, tx: &mut Transaction<'a, Postgres>, user: &User) -> Result<User, sqlx::Error> {
+        self.get_or_create_user_inner(&mut **tx, user).await
+    }
+}
+
+// Trait dyn — pour AppState
+#[async_trait]
+impl DynUserRepository for SqlxUserRepository {
+    async fn create_user(&self, conn: &mut PgConnection, user: &CreateUserCommand) -> Result<User, sqlx::Error> {
+        self.create_user_inner(&mut *conn, user).await
+    }
+    async fn get_user(&self, conn: &mut PgConnection, username: &str) -> Result<User, sqlx::Error> {
+        self.get_user_inner(&mut *conn, username).await
+    }
+    async fn get_or_create_user(&self, conn: &mut PgConnection, user: &User) -> Result<User, sqlx::Error> {
+        self.get_or_create_user_inner(&mut *conn, user).await
     }
 }
 

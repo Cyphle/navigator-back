@@ -22,14 +22,14 @@ struct FamilyView {
 
 pub async fn get_families_middleware<DB, U, F, GetFamilies, Fut>(
     session: Session,
-    state: web::Data<ActixState<DB, U, F>>,
+    state: web::Data<ActixState<DB, U>>,
     get_families: GetFamilies,
 ) -> impl Responder
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
     F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
-    GetFamilies: Fn(web::Data<ActixState<DB, U, F>>, String) -> Fut,
+    GetFamilies: Fn(web::Data<ActixState<DB, U>>, String) -> Fut,
     Fut: Future<Output = Result<Vec<Family>, Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Getting families");
@@ -59,17 +59,16 @@ where
     }
 }
 
-pub async fn create_family_middleware<DB, U, F, CreateFamily, Fut>(
+pub async fn create_family_middleware<DB, U, CreateFamily, Fut>(
     session: Session,
-    state: web::Data<ActixState<DB, U, F>>,
+    state: web::Data<ActixState<DB, U>>,
     request: CreateFamilyRequest,
     create_family: CreateFamily,
 ) -> impl Responder
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
-    CreateFamily: Fn(web::Data<ActixState<DB, U, F>>, String, CreateFamilyCommand) -> Fut,
+    CreateFamily: Fn(web::Data<ActixState<DB, U>>, String, CreateFamilyCommand) -> Fut,
     Fut: Future<Output = Result<Family, Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Creating family middleware");

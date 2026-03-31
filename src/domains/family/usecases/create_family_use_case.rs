@@ -10,16 +10,11 @@ use actix_web::web;
 use log::{error, info};
 use sqlx::Error;
 
-pub async fn create_family_use_case<DB, U, F>(
-    state: web::Data<ActixState<DB, U, F>>,
+pub async fn create_family_use_case(
+    state: web::Data<ActixState>,
     username: String,
     command: CreateFamilyCommand,
-) -> Result<Family, Box<dyn ApplicationError>>
-where
-    DB: DbConnection,
-    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
-{
+) -> Result<Family, Box<dyn ApplicationError>> {
     info!("Creating family {} for user '{}'", &command.name, &username);
 
     let mut tx = state
@@ -109,7 +104,7 @@ mod tests {
     }
 
     fn make_state_db_error()
-        -> web::Data<ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>> {
+        -> web::Data<ActixState> {
         mock_actix_state(MockPoolPostgresError, MockStateConfig::default())
     }
 

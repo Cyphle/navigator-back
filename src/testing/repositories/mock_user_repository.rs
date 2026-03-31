@@ -1,11 +1,12 @@
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
-use crate::domains::user::domain::user_repository::UserRepository;
+use crate::domains::user::domain::user_repository::{DynUserRepository, UserRepository};
 use crate::domains::user::repositories::user_sqlx_repository::UserEntity;
 use crate::testing::repositories::mock_database::MockTransaction;
 use async_trait::async_trait;
-use sqlx::{Postgres, Transaction};
+use sqlx::{PgConnection, Postgres, Transaction};
 
+// TODO à revoir tous ces mocks. c'est difficile à comprendre
 pub struct MockUserRepository {
     pub fixed_id: u64,
     pub fixed_username: String,
@@ -47,6 +48,22 @@ impl MockUserRepository {
             first_name: self.fixed_first_name.clone(),
             last_name: self.fixed_last_name.clone(),
         }
+    }
+}
+
+#[async_trait]
+impl DynUserRepository for MockUserRepository {
+    async fn create_user(&self, _conn: &mut PgConnection, _user: &CreateUserCommand) -> Result<User, sqlx::Error> {
+        if self.should_error { return Err(sqlx::Error::RowNotFound); }
+        Ok(User { username: "mock_user".to_string(), ..Default::default() })
+    }
+    async fn get_user(&self, _conn: &mut PgConnection, _username: &str) -> Result<User, sqlx::Error> {
+        if self.should_error { return Err(sqlx::Error::RowNotFound); }
+        Ok(User { username: "mock_user".to_string(), ..Default::default() })
+    }
+    async fn get_or_create_user(&self, _conn: &mut PgConnection, _user: &User) -> Result<User, sqlx::Error> {
+        if self.should_error { return Err(sqlx::Error::RowNotFound); }
+        Ok(User { username: "mock_user".to_string(), ..Default::default() })
     }
 }
 

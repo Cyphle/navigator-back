@@ -6,15 +6,16 @@ use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::domain::family::{Family, FamilyMember};
 use crate::domains::family::domain::family_relation::FamilyRelation;
 use crate::domains::family::repositories::family_entity::FamilyEntity;
-use crate::domains::family::domain::family_repository::FamilyRepository;
+use crate::domains::family::domain::family_repository::{DynFamilyRepository, FamilyRepository};
+
+use sqlx::PgConnection;
 
 pub struct SqlxFamilyRepository;
 
-#[async_trait]
-impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
-    async fn get_families_for(
+impl SqlxFamilyRepository {
+    async fn get_families_for_inner(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         username: &str,
     ) -> Result<Vec<Family>, Error> {
         let families_entities = sqlx::query_as::<Postgres, FamilyEntity>(
@@ -28,7 +29,7 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
             )",
         )
             .bind(username)
-            .fetch_all(&mut **tx)
+            .fetch_all(&mut *conn)
             .await?;
 
         let mut families_map: HashMap<i32, Vec<FamilyEntity>> = HashMap::new();
@@ -36,21 +37,16 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
             families_map.entry(entity.id).or_default().push(entity);
         }
 
-        let families = families_map
-            .into_values()
-            .map(|entities| self.to_family(entities))
-            .collect();
-
-        Ok(families)
+        Ok(families_map.into_values().map(|e| self.to_family(e)).collect())
     }
 
-    async fn get_family_by_name(
+    async fn get_family_by_name_inner(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         username: &str,
         name: &str,
     ) -> Result<Family, Error> {
-        let families_entities = sqlx::query_as::<sqlx::Postgres, FamilyEntity>(
+        let families_entities = sqlx::query_as::<Postgres, FamilyEntity>(
             "SELECT f.id, f.name, f.creator_id, f.active, u.id as user_id, u.username, fm.relation, fm.is_admin FROM families f \
             INNER JOIN family_members fm    ON f.id = fm.family_id \
             INNER JOIN users u              ON fm.user_id = u.id \
@@ -63,7 +59,7 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
         )
             .bind(username)
             .bind(name)
-            .fetch_all(&mut **tx)
+            .fetch_all(&mut *conn)
             .await?;
 
         if families_entities.is_empty() {
@@ -73,49 +69,46 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
         Ok(self.to_family(families_entities))
     }
 
-    async fn create_family(
+    async fn create_family_inner(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         username: &str,
-        command: &CreateFamilyCommand
+        command: &CreateFamilyCommand,
     ) -> Result<Family, Error> {
         let mut usernames: Vec<String> = command.members.iter().map(|m| m.username_or_email.clone()).collect();
         usernames.push(username.to_string());
 
-        let user_ids = self.get_user_ids(tx, usernames).await?;
+        let user_ids = self.get_user_ids(conn, usernames).await?;
         let creator_id = self.get_creator_id(username, &user_ids)?;
-        let family_id = self.insert_family_in_database(tx, &command.name, creator_id).await?;
-        self.insert_creator_in_database(tx, family_id, creator_id, command.creator_relation.as_str()).await?;
-        let (user_ids, relations, is_admins) = self.insert_unknown_family_members(tx, command, &user_ids).await?;
-        self.insert_known_family_members(tx, family_id, &user_ids, &relations, &is_admins).await?;
+        let family_id = self.insert_family_in_database(conn, &command.name, creator_id).await?;
+        self.insert_creator_in_database(conn, family_id, creator_id, command.creator_relation.as_str()).await?;
+        let (user_ids, relations, is_admins) = self.insert_unknown_family_members(conn, command, &user_ids).await?;
+        self.insert_known_family_members(conn, family_id, &user_ids, &relations, &is_admins).await?;
 
-        let families_entities = sqlx::query_as::<sqlx::Postgres, FamilyEntity>(
+        let families_entities = sqlx::query_as::<Postgres, FamilyEntity>(
             "SELECT f.id, f.name, f.creator_id, f.active, u.id as user_id, u.username, fm.relation, fm.is_admin FROM families f \
             INNER JOIN family_members fm    ON f.id = fm.family_id \
             INNER JOIN users u              ON fm.user_id = u.id \
             WHERE f.id = $1",
         )
             .bind(family_id)
-            .fetch_all(&mut **tx)
+            .fetch_all(&mut *conn)
             .await?;
 
         Ok(self.to_family(families_entities))
     }
-}
 
-impl SqlxFamilyRepository {
-    async fn get_user_ids<'a>(
+    async fn get_user_ids(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         usernames: Vec<String>,
     ) -> Result<Vec<(i32, Option<String>, Option<String>)>, Error> {
-        let user_id_username: Vec<(i32, Option<String>, Option<String>)> = sqlx::query_as(
+        Ok(sqlx::query_as(
             "SELECT id, username, email FROM users WHERE username = ANY($1) OR email = ANY($1)",
         )
             .bind(usernames)
-            .fetch_all(&mut **tx)
-            .await?;
-        Ok(user_id_username)
+            .fetch_all(&mut *conn)
+            .await?)
     }
 
     fn get_creator_id(
@@ -137,9 +130,9 @@ impl SqlxFamilyRepository {
             })
     }
 
-    async fn insert_family_in_database<'a>(
+    async fn insert_family_in_database(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         name: &str,
         creator_id: i32,
     ) -> Result<i32, Error> {
@@ -149,14 +142,14 @@ impl SqlxFamilyRepository {
             .bind(name)
             .bind(creator_id)
             .bind(true)
-            .fetch_one(&mut **tx)
+            .fetch_one(&mut *conn)
             .await?;
         Ok(family_id.0)
     }
 
-    async fn insert_creator_in_database<'a>(
+    async fn insert_creator_in_database(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         family_id: i32,
         creator_id: i32,
         relation: &str,
@@ -168,26 +161,25 @@ impl SqlxFamilyRepository {
             .bind(creator_id)
             .bind(relation)
             .bind(true)
-            .execute(&mut **tx)
+            .execute(&mut *conn)
             .await?;
         Ok(())
     }
 
-    async fn insert_unknown_family_members<'a>(
+    async fn insert_unknown_family_members(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         command: &CreateFamilyCommand,
         user_id_username: &[(i32, Option<String>, Option<String>)],
     ) -> Result<(Vec<i32>, Vec<String>, Vec<bool>), Error> {
-        let (mut user_ids, mut relations, mut is_admins): (Vec<i32>, Vec<String>, Vec<bool>) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut user_ids, mut relations, mut is_admins) = (Vec::new(), Vec::new(), Vec::new());
 
         for member in &command.members {
-            let existing_user = user_id_username.iter()
-                .find(|(_, uname, email)| {
-                    let matches_uname = uname.as_ref().map_or(false, |u| u.to_lowercase() == member.username_or_email.to_lowercase());
-                    let matches_email = email.as_ref().map_or(false, |e| e.to_lowercase() == member.username_or_email.to_lowercase());
-                    matches_uname || matches_email
-                });
+            let existing_user = user_id_username.iter().find(|(_, uname, email)| {
+                let matches_uname = uname.as_ref().map_or(false, |u| u.to_lowercase() == member.username_or_email.to_lowercase());
+                let matches_email = email.as_ref().map_or(false, |e| e.to_lowercase() == member.username_or_email.to_lowercase());
+                matches_uname || matches_email
+            });
 
             let user_id = if let Some((id, _, _)) = existing_user {
                 *id
@@ -199,7 +191,7 @@ impl SqlxFamilyRepository {
                     .bind(&member.username_or_email)
                     .bind("Coincoin")
                     .bind("Mon canard")
-                    .fetch_one(&mut **tx)
+                    .fetch_one(&mut *conn)
                     .await?;
                 new_user_id.0
             };
@@ -211,9 +203,9 @@ impl SqlxFamilyRepository {
         Ok((user_ids, relations, is_admins))
     }
 
-    async fn insert_known_family_members<'a>(
+    async fn insert_known_family_members(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        conn: &mut PgConnection,
         family_id: i32,
         user_ids: &[i32],
         relations: &[String],
@@ -222,13 +214,13 @@ impl SqlxFamilyRepository {
         if !user_ids.is_empty() {
             sqlx::query(
                 "INSERT INTO family_members (family_id, user_id, relation, is_admin)
-         SELECT $1, * FROM UNNEST($2::int[], $3::text[], $4::boolean[])",
+                 SELECT $1, * FROM UNNEST($2::int[], $3::text[], $4::boolean[])",
             )
                 .bind(family_id)
                 .bind(user_ids)
                 .bind(relations)
                 .bind(is_admins)
-                .execute(&mut **tx)
+                .execute(&mut *conn)
                 .await?;
         }
         Ok(())
@@ -237,26 +229,49 @@ impl SqlxFamilyRepository {
     fn to_family(&self, families: Vec<FamilyEntity>) -> Family {
         let creator_username = families
             .iter()
-            .find(|family| family.creator_id == family.user_id)
-            .map(|family| family.username.clone())
+            .find(|f| f.creator_id == f.user_id)
+            .map(|f| f.username.clone())
             .unwrap();
 
-        let members = families
-            .iter()
-            .map(|family| FamilyMember {
-                username: family.username.clone(),
-                relation: FamilyRelation::from_str(&family.relation),
-                is_admin: family.is_admin
-            })
-            .collect::<Vec<FamilyMember>>();
+        let members = families.iter().map(|f| FamilyMember {
+            username: f.username.clone(),
+            relation: FamilyRelation::from_str(&f.relation),
+            is_admin: f.is_admin,
+        }).collect();
 
         Family {
             id: families[0].id,
             name: families[0].name.clone(),
             creator_username,
             members,
-            active: families[0].active
+            active: families[0].active,
         }
+    }
+}
+
+#[async_trait]
+impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
+    async fn get_families_for(&self, tx: &mut Transaction<'a, Postgres>, username: &str) -> Result<Vec<Family>, Error> {
+        self.get_families_for_inner(&mut **tx, username).await
+    }
+    async fn get_family_by_name(&self, tx: &mut Transaction<'a, Postgres>, username: &str, name: &str) -> Result<Family, Error> {
+        self.get_family_by_name_inner(&mut **tx, username, name).await
+    }
+    async fn create_family(&self, tx: &mut Transaction<'a, Postgres>, username: &str, command: &CreateFamilyCommand) -> Result<Family, Error> {
+        self.create_family_inner(&mut **tx, username, command).await
+    }
+}
+
+#[async_trait]
+impl DynFamilyRepository for SqlxFamilyRepository {
+    async fn get_families_for(&self, conn: &mut PgConnection, username: &str) -> Result<Vec<Family>, Error> {
+        self.get_families_for_inner(&mut *conn, username).await
+    }
+    async fn get_family_by_name(&self, conn: &mut PgConnection, username: &str, name: &str) -> Result<Family, Error> {
+        self.get_family_by_name_inner(&mut *conn, username, name).await
+    }
+    async fn create_family(&self, conn: &mut PgConnection, username: &str, command: &CreateFamilyCommand) -> Result<Family, Error> {
+        self.create_family_inner(&mut *conn, username, command).await
     }
 }
 
@@ -268,13 +283,8 @@ mod tests {
 
     async fn create_user(tx: &mut Transaction<'_, Postgres>, username: &str, email: &str) -> i32 {
         let row: (i32,) = sqlx::query_as("INSERT INTO users (username, email, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING id")
-            .bind(username)
-            .bind(email)
-            .bind("First")
-            .bind("Last")
-            .fetch_one(&mut **tx)
-            .await
-            .unwrap();
+            .bind(username).bind(email).bind("First").bind("Last")
+            .fetch_one(&mut **tx).await.unwrap();
         row.0
     }
 
@@ -282,52 +292,32 @@ mod tests {
     async fn test_create_family(mut conn: sqlx::PgConnection) {
         let repo = SqlxFamilyRepository;
         let mut tx = conn.begin().await.unwrap();
-
-        // Ensure creator exists
         create_user(&mut tx, "alice", "alice@example.com").await;
-
         let command = CreateFamilyCommand {
             name: "The Alices".to_string(),
             creator_relation: FamilyRelation::Parent,
-            members: vec![
-                CreateFamilyMemberCommand {
-                    username_or_email: "bob@example.com".to_string(),
-                    relation: FamilyRelation::Child,
-                    is_admin: false,
-                }
-            ],
+            members: vec![CreateFamilyMemberCommand {
+                username_or_email: "bob@example.com".to_string(),
+                relation: FamilyRelation::Child,
+                is_admin: false,
+            }],
         };
-
         let family = repo.create_family(&mut tx, "alice", &command).await.unwrap();
         assert_eq!(family.name, "The Alices");
         assert_eq!(family.creator_username, "alice");
-        assert_eq!(family.members.len(), 2); // Alice + Bob
+        assert_eq!(family.members.len(), 2);
     }
 
     #[sqlx_testcontainers::test]
     async fn test_get_families_for(mut conn: sqlx::PgConnection) {
         let repo = SqlxFamilyRepository;
         let mut tx = conn.begin().await.unwrap();
-
         let alice_id = create_user(&mut tx, "alice", "alice@example.com").await;
-        
-        // Manual seed
         let family_id: (i32,) = sqlx::query_as("INSERT INTO families (name, creator_id) VALUES ($1, $2) RETURNING id")
-            .bind("Alice Family")
-            .bind(alice_id)
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap();
-        
+            .bind("Alice Family").bind(alice_id).fetch_one(&mut *tx).await.unwrap();
         sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, $3, $4)")
-            .bind(family_id.0)
-            .bind(alice_id)
-            .bind("PARENT")
-            .bind(true)
-            .execute(&mut *tx)
-            .await
-            .unwrap();
-
+            .bind(family_id.0).bind(alice_id).bind("PARENT").bind(true)
+            .execute(&mut *tx).await.unwrap();
         let families = repo.get_families_for(&mut tx, "alice").await.unwrap();
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].name, "Alice Family");
@@ -337,16 +327,13 @@ mod tests {
     async fn test_get_family_by_name(mut conn: sqlx::PgConnection) {
         let repo = SqlxFamilyRepository;
         let mut tx = conn.begin().await.unwrap();
-
-        let alice_id = create_user(&mut tx, "alice", "alice@example.com").await;
-        
+        create_user(&mut tx, "alice", "alice@example.com").await;
         let command = CreateFamilyCommand {
             name: "Alice Club".to_string(),
             creator_relation: FamilyRelation::Other,
             members: vec![],
         };
         repo.create_family(&mut tx, "alice", &command).await.unwrap();
-
         let family = repo.get_family_by_name(&mut tx, "alice", "alice club").await.unwrap();
         assert_eq!(family.name, "Alice Club");
     }

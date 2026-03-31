@@ -6,15 +6,10 @@ use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::domains::user::domain::user_repository::UserRepository;
 use actix_web::web;
 
-pub async fn get_families_use_case<DB, U, F>(
-    state: web::Data<ActixState<DB, U, F>>,
+pub async fn get_families_use_case(
+    state: web::Data<ActixState>,
     username: String,
-) -> Result<Vec<Family>, Box<dyn ApplicationError>>
-where
-    DB: DbConnection,
-    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
-{
+) -> Result<Vec<Family>, Box<dyn ApplicationError>> {
     let mut tx = state
         .db_connection
         .begin()
@@ -68,7 +63,7 @@ mod tests {
     }
 
     fn make_state_db_error()
-    -> web::Data<ActixState<MockPoolPostgresError, MockUserRepository, MockFamilyRepository>> {
+    -> web::Data<ActixState> {
         mock_actix_state(MockPoolPostgresError, MockStateConfig::default())
     }
 

@@ -1,5 +1,5 @@
-use crate::domains::family::domain::family_repository::FamilyRepository;
-use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
+use crate::domains::family::domain::family_repository::DynFamilyRepository;
+use crate::domains::user::domain::user_repository::DynUserRepository;
 use crate::security::oidc::OidcConfig;
 use openid::{Client, Discovered, StandardClaims};
 use sqlx::{Pool, Postgres, Transaction};
@@ -7,8 +7,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::domains::user::domain::user_repository::UserRepository;
-use crate::domains::user::repositories::user_sqlx_repository::SqlxUserRepository;
 
 pub trait DbConnection: Send + Sync {
     type Tx<'a>: DbTransaction + Send
@@ -56,20 +54,14 @@ impl DbConnection for Pool<Postgres> {
     }
 }
 
-pub struct ActixState<
-    DB = Pool<Postgres>,
-    U = SqlxUserRepository,
-    F = SqlxFamilyRepository,
->
+pub struct ActixState<DB = Pool<Postgres>>
 where
     DB: DbConnection,
-    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
     pub oidc_config: OidcConfig,
     pub oidc_client: Option<Arc<Mutex<Client<Discovered, StandardClaims>>>>,
 
     pub db_connection: DB,
-    pub user_repository: Arc<U>,
-    pub family_repository: Arc<F>,
+    pub user_repository: Arc<dyn DynUserRepository>,
+    pub family_repository: Arc<dyn DynFamilyRepository>,
 }

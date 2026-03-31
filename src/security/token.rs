@@ -35,7 +35,7 @@ pub async fn get_username_from_bearer(
 // To get the username_or_email from the bearer token in session
 pub async fn get_username_from_session(
     client: &DiscoveredClient,
-    session: &actix_session::Session,
+    session: &Session,
 ) -> Option<String> {
     let bearer = session.get::<Bearer>(USER_SESSION_KEY);
 
@@ -55,11 +55,10 @@ pub async fn get_username_from_session(
 }
 
 // To get the connect username_or_email from session
-pub async fn get_connected_username<DB, U, F>(session: &Session, state: &web::Data<ActixState<DB, U, F>>) -> Option<String>
+pub async fn get_connected_username<DB, U, F>(session: &Session, state: &web::Data<ActixState<DB, U>>) -> Option<String>
 where
     DB: DbConnection,
     U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
 {
     #[cfg(test)]
     if let Ok(Some(username)) = session.get::<String>("test_username") {

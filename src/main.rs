@@ -8,7 +8,7 @@ use crate::config::actix::ActixState;
 use crate::config::cors::actix_cors_config;
 use crate::config::database::connect;
 use crate::config::session::actix_session_config;
-use crate::domains::bank_account::http::bank_account_controller::get_bank_account_summary_endpoint;
+use crate::domains::bank_account::http::bank_account_controller::{get_bank_account_summary_endpoint, get_bank_accounts_overviews};
 use crate::domains::calendar::http::calendar_controller::get_calendar_summary_endpoint;
 use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
 use crate::domains::meal::http::meal_controller::get_meal_summary_endpoint;
@@ -92,7 +92,9 @@ async fn main() -> std::io::Result<()> {
                             .service(get_recipe_summary_endpoint)
                             .service(get_shopping_list_summary_endpoint)
                             .service(get_meal_summary_endpoint)
+                            // Bank account
                             .service(get_bank_account_summary_endpoint)
+                            .service(get_bank_accounts_overviews)
                             // Technical
                             .service(live)
                             .service(ready)

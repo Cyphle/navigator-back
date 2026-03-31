@@ -655,10 +655,10 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "navigator-secret",
       "redirectUris": [
-        "http://localhost:8181/*"
+        "http://localhost:9000/*"
       ],
       "webOrigins": [
-        "http://localhost:8181"
+        "http://localhost:9000"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -673,7 +673,7 @@
       "attributes": {
         "client.secret.creation.time": "1723454948",
         "client.introspection.response.allow.jwt.claim.enabled": "false",
-        "post.logout.redirect.uris": "http://localhost:8181",
+        "post.logout.redirect.uris": "http://localhost:9000",
         "oauth2.device.authorization.grant.enabled": "false",
         "backchannel.logout.revoke.offline.tokens": "false",
         "use.refresh.tokens": "true",

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use async_trait::async_trait;
-use sqlx::{Error, Postgres, Transaction};
+use sqlx::{Error, Postgres};
 use log::error;
 use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::domain::family::{Family, FamilyMember};
 use crate::domains::family::domain::family_relation::FamilyRelation;
 use crate::domains::family::repositories::family_entity::FamilyEntity;
 use crate::config::actix::AsPgConn;
-use crate::domains::family::domain::family_repository::{DynFamilyRepository, FamilyRepository};
+use crate::domains::family::domain::family_repository::FamilyRepository;
 
 use sqlx::PgConnection;
 
@@ -251,20 +251,7 @@ impl SqlxFamilyRepository {
 }
 
 #[async_trait]
-impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
-    async fn get_families_for(&self, tx: &mut Transaction<'a, Postgres>, username: &str) -> Result<Vec<Family>, Error> {
-        self.get_families_for_inner(&mut **tx, username).await
-    }
-    async fn get_family_by_name(&self, tx: &mut Transaction<'a, Postgres>, username: &str, name: &str) -> Result<Family, Error> {
-        self.get_family_by_name_inner(&mut **tx, username, name).await
-    }
-    async fn create_family(&self, tx: &mut Transaction<'a, Postgres>, username: &str, command: &CreateFamilyCommand) -> Result<Family, Error> {
-        self.create_family_inner(&mut **tx, username, command).await
-    }
-}
-
-#[async_trait]
-impl DynFamilyRepository for SqlxFamilyRepository {
+impl FamilyRepository for SqlxFamilyRepository {
     async fn get_families_for(&self, conn: &mut dyn AsPgConn, username: &str) -> Result<Vec<Family>, Error> {
         self.get_families_for_inner(conn.as_pg_conn(), username).await
     }
@@ -279,7 +266,7 @@ impl DynFamilyRepository for SqlxFamilyRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::Connection;
+    use sqlx::{Connection, Transaction};
     use crate::domains::family::domain::create_family_command::CreateFamilyMemberCommand;
 
     async fn create_user(tx: &mut Transaction<'_, Postgres>, username: &str, email: &str) -> i32 {

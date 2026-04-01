@@ -29,7 +29,7 @@ pub async fn connect(config: &DatabaseConfig) -> Pool<Postgres> {
         config.username, config.password, config.host, config.port, config.name
     );
 
-    let mut options = PgConnectOptions::from_str(&connection_string)
+    let options = PgConnectOptions::from_str(&connection_string)
         .expect("Invalid connection string")
         .log_statements(if config.sqlx_logging { LevelFilter::Debug } else { LevelFilter::Off })
         .log_slow_statements(LevelFilter::Warn, Duration::from_secs(1));

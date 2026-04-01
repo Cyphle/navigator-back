@@ -13,7 +13,6 @@ impl AsPgConn for MockTransaction {
     }
 }
 
-// TODO à revoir tous ces mocks. c'est difficile à comprendre
 impl DbTransaction for MockTransaction {
     fn commit<'a>(self) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + 'a>>
     where

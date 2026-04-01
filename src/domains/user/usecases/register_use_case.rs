@@ -6,10 +6,8 @@ use actix_web::web::Data;
 use actix_web::{post, web, HttpResponse, Responder};
 use log::{error, info};
 use reqwest::Client as HttpClient;
-use serde::Serialize;
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
-use crate::domains::user::domain::user_repository::UserRepository;
 use crate::security::controllers::keycloak::{KeycloakCredential, KeycloakUser};
 
 #[derive(serde::Deserialize)]
@@ -48,6 +46,7 @@ pub async fn register(
         }
     };
 
+    // TODO il faut vérifier que le user n'existe pas déjà ici et renvoyer une erreur s'il existe (le username et le mail)
     let result: Result<User, sqlx::Error> = state
         .user_repository
         .create_user(&mut tx, &command)

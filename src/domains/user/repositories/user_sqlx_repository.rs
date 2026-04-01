@@ -1,9 +1,9 @@
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
 use crate::config::actix::AsPgConn;
-use crate::domains::user::domain::user_repository::{DynUserRepository, UserRepository};
+use crate::domains::user::domain::user_repository::UserRepository;
 use async_trait::async_trait;
-use sqlx::{FromRow, PgConnection, Postgres, Transaction};
+use sqlx::{FromRow, Postgres};
 
 #[derive(Debug, FromRow)]
 pub struct UserEntity {
@@ -86,23 +86,8 @@ impl SqlxUserRepository {
     }
 }
 
-// Trait générique — pour les tests d'intégration
 #[async_trait]
-impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
-    async fn create_user(&self, tx: &mut Transaction<'a, Postgres>, user: &CreateUserCommand) -> Result<User, sqlx::Error> {
-        self.create_user_inner(&mut **tx, user).await
-    }
-    async fn get_user(&self, tx: &mut Transaction<'a, Postgres>, username: &str) -> Result<User, sqlx::Error> {
-        self.get_user_inner(&mut **tx, username).await
-    }
-    async fn get_or_create_user(&self, tx: &mut Transaction<'a, Postgres>, user: &User) -> Result<User, sqlx::Error> {
-        self.get_or_create_user_inner(&mut **tx, user).await
-    }
-}
-
-// Trait dyn — pour AppState
-#[async_trait]
-impl DynUserRepository for SqlxUserRepository {
+impl UserRepository for SqlxUserRepository {
     async fn create_user(&self, conn: &mut dyn AsPgConn, user: &CreateUserCommand) -> Result<User, sqlx::Error> {
         self.create_user_inner(conn.as_pg_conn(), user).await
     }

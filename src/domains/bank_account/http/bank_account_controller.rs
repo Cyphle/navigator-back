@@ -3,7 +3,6 @@ use crate::domains::bank_account::http::bank_account_views::BankAccountSummaryVi
 use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
 use log::{debug, info};
-use serde::Deserialize;
 use crate::domains::bank_account::http::bank_account_requests::RequestFilter;
 
 #[get("/families/{family_id}/bank-accounts/summary")]

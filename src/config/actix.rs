@@ -1,5 +1,5 @@
-use crate::domains::family::domain::family_repository::DynFamilyRepository;
-use crate::domains::user::domain::user_repository::DynUserRepository;
+use crate::domains::family::domain::family_repository::FamilyRepository;
+use crate::domains::user::domain::user_repository::UserRepository;
 use crate::security::oidc::OidcConfig;
 use openid::{Client, Discovered, StandardClaims};
 use sqlx::{PgConnection, Pool, Postgres, Transaction};
@@ -72,6 +72,6 @@ where
     pub oidc_client: Option<Arc<Mutex<Client<Discovered, StandardClaims>>>>,
 
     pub db_connection: DB,
-    pub user_repository: Arc<dyn DynUserRepository>,
-    pub family_repository: Arc<dyn DynFamilyRepository>,
+    pub user_repository: Arc<dyn UserRepository>,
+    pub family_repository: Arc<dyn FamilyRepository>,
 }

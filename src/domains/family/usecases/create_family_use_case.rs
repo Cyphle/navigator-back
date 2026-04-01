@@ -1,20 +1,21 @@
-use crate::config::actix::{ActixState, DbConnection, DbTransaction};
+use crate::config::actix::{ActixState, AsPgConn, DbConnection, DbTransaction};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::domain::family::Family;
 use crate::domains::family::domain::family_errors::FamilyAlreadyExistsError;
-use crate::domains::family::domain::family_repository::FamilyRepository;
-use crate::domains::user::domain::user_repository::UserRepository;
 use actix_web::web;
 use log::{error, info};
 use sqlx::Error;
 
-pub async fn create_family_use_case(
-    state: web::Data<ActixState>,
+pub async fn create_family_use_case<DB: DbConnection>(
+    state: web::Data<ActixState<DB>>,
     username: String,
     command: CreateFamilyCommand,
-) -> Result<Family, Box<dyn ApplicationError>> {
+) -> Result<Family, Box<dyn ApplicationError>>
+where
+    for<'a> <DB as DbConnection>::Tx<'a>: AsPgConn,
+{
     info!("Creating family {} for user '{}'", &command.name, &username);
 
     let mut tx = state
@@ -74,8 +75,6 @@ mod tests {
     use crate::domains::family::usecases::create_family_use_case::create_family_use_case;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
-    use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
-    use crate::testing::repositories::mock_user_repository::MockUserRepository;
     use actix_web::web;
 
     fn make_state_ok() -> web::Data<MockActixState> {
@@ -103,8 +102,7 @@ mod tests {
         )
     }
 
-    fn make_state_db_error()
-        -> web::Data<ActixState> {
+    fn make_state_db_error() -> web::Data<ActixState<MockPoolPostgresError>> {
         mock_actix_state(MockPoolPostgresError, MockStateConfig::default())
     }
 
@@ -174,6 +172,23 @@ mod tests {
             },
         )
             .await;
+
+        let err = result.expect_err("should return error");
+        assert!(err.get_message().contains("no rows returned"));
+    }
+
+    #[actix_web::test]
+    async fn should_error_on_db_connection_failure() {
+        let state = make_state_db_error();
+        let result = create_family_use_case(
+            state,
+            "john".to_string(),
+            CreateFamilyCommand {
+                name: "Family C".to_string(),
+                creator_relation: FamilyRelation::Parent,
+                members: vec![],
+            },
+        ).await;
 
         let err = result.expect_err("should return error");
         assert!(err.get_message().contains("no rows returned"));

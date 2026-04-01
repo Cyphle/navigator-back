@@ -1,17 +1,15 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::config::application::USER_SESSION_KEY;
-use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::security::oidc::OidcAdminConfig;
 use actix_session::Session;
 use actix_web::web;
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use openid::{
     Bearer, Client, Discovered, DiscoveredClient, StandardClaims, Token,
     TokenIntrospection,
 };
 use reqwest::Client as HttpClient;
 use serde::Deserialize;
-use crate::domains::user::domain::user_repository::UserRepository;
 
 // To get the username_or_email from a Bearer token
 pub async fn get_username_from_bearer(
@@ -55,10 +53,9 @@ pub async fn get_username_from_session(
 }
 
 // To get the connect username_or_email from session
-pub async fn get_connected_username<DB, U, F>(session: &Session, state: &web::Data<ActixState<DB, U>>) -> Option<String>
+pub async fn get_connected_username<DB>(session: &Session, state: &web::Data<ActixState<DB>>) -> Option<String>
 where
     DB: DbConnection,
-    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
 {
     #[cfg(test)]
     if let Ok(Some(username)) = session.get::<String>("test_username") {

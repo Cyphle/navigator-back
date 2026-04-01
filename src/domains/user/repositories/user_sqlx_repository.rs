@@ -1,5 +1,6 @@
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
+use crate::config::actix::AsPgConn;
 use crate::domains::user::domain::user_repository::{DynUserRepository, UserRepository};
 use async_trait::async_trait;
 use sqlx::{FromRow, PgConnection, Postgres, Transaction};
@@ -102,14 +103,14 @@ impl<'a> UserRepository<Transaction<'a, Postgres>> for SqlxUserRepository {
 // Trait dyn — pour AppState
 #[async_trait]
 impl DynUserRepository for SqlxUserRepository {
-    async fn create_user(&self, conn: &mut PgConnection, user: &CreateUserCommand) -> Result<User, sqlx::Error> {
-        self.create_user_inner(&mut *conn, user).await
+    async fn create_user(&self, conn: &mut dyn AsPgConn, user: &CreateUserCommand) -> Result<User, sqlx::Error> {
+        self.create_user_inner(conn.as_pg_conn(), user).await
     }
-    async fn get_user(&self, conn: &mut PgConnection, username: &str) -> Result<User, sqlx::Error> {
-        self.get_user_inner(&mut *conn, username).await
+    async fn get_user(&self, conn: &mut dyn AsPgConn, username: &str) -> Result<User, sqlx::Error> {
+        self.get_user_inner(conn.as_pg_conn(), username).await
     }
-    async fn get_or_create_user(&self, conn: &mut PgConnection, user: &User) -> Result<User, sqlx::Error> {
-        self.get_or_create_user_inner(&mut *conn, user).await
+    async fn get_or_create_user(&self, conn: &mut dyn AsPgConn, user: &User) -> Result<User, sqlx::Error> {
+        self.get_or_create_user_inner(conn.as_pg_conn(), user).await
     }
 }
 
@@ -131,7 +132,7 @@ mod tests {
             password: "password123".to_string(),
         };
 
-        let result = repo.create_user(&mut tx, &command).await.unwrap();
+        let result = repo.create_user_inner(&mut *tx, &command).await.unwrap();
         assert_eq!(result.username, "alice");
         assert_eq!(result.email, "alice@example.com");
     }
@@ -152,7 +153,7 @@ mod tests {
             .await
             .unwrap();
 
-        let entity = repo.get_user(&mut tx, "bob").await.unwrap();
+        let entity = repo.get_user_inner(&mut *tx, "bob").await.unwrap();
         assert_eq!(entity.username, "bob");
         assert_eq!(entity.email, "bob@example.com");
     }
@@ -172,11 +173,11 @@ mod tests {
         };
 
         // First call should create
-        let entity = repo.get_or_create_user(&mut tx, &user).await.unwrap();
+        let entity = repo.get_or_create_user_inner(&mut *tx, &user).await.unwrap();
         assert_eq!(entity.username, "johndoe");
 
         // Second call should return existing
-        let entity2 = repo.get_or_create_user(&mut tx, &user).await.unwrap();
+        let entity2 = repo.get_or_create_user_inner(&mut *tx, &user).await.unwrap();
         assert_eq!(entity2.id, entity.id);
         assert_eq!(entity2.username, "johndoe");
     }

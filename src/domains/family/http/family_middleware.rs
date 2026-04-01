@@ -4,8 +4,6 @@ use crate::domains::common::errors::missing_username_error::MissingUsernameError
 use crate::domains::family::domain::create_family_command::{CreateFamilyCommand, CreateFamilyMemberCommand};
 use crate::domains::family::domain::family::Family;
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
-use crate::domains::family::repositories::family_entity::FamilyEntity;
-use crate::domains::family::domain::family_repository::FamilyRepository;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
@@ -13,23 +11,20 @@ use log::{debug, error};
 use serde::Serialize;
 use std::future::Future;
 use crate::domains::family::domain::family_relation::FamilyRelation;
-use crate::domains::user::domain::user_repository::UserRepository;
 
 #[derive(Serialize)]
 struct FamilyView {
     name: String,
 }
 
-pub async fn get_families_middleware<DB, U, F, GetFamilies, Fut>(
+pub async fn get_families_middleware<DB, GetFamilies, Fut>(
     session: Session,
-    state: web::Data<ActixState<DB, U>>,
+    state: web::Data<ActixState<DB>>,
     get_families: GetFamilies,
 ) -> impl Responder
 where
     DB: DbConnection,
-    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
-    GetFamilies: Fn(web::Data<ActixState<DB, U>>, String) -> Fut,
+    GetFamilies: Fn(web::Data<ActixState<DB>>, String) -> Fut,
     Fut: Future<Output = Result<Vec<Family>, Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Getting families");
@@ -59,16 +54,15 @@ where
     }
 }
 
-pub async fn create_family_middleware<DB, U, CreateFamily, Fut>(
+pub async fn create_family_middleware<DB, CreateFamily, Fut>(
     session: Session,
-    state: web::Data<ActixState<DB, U>>,
+    state: web::Data<ActixState<DB>>,
     request: CreateFamilyRequest,
     create_family: CreateFamily,
 ) -> impl Responder
 where
     DB: DbConnection,
-    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    CreateFamily: Fn(web::Data<ActixState<DB, U>>, String, CreateFamilyCommand) -> Fut,
+    CreateFamily: Fn(web::Data<ActixState<DB>>, String, CreateFamilyCommand) -> Fut,
     Fut: Future<Output = Result<Family, Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Creating family middleware");

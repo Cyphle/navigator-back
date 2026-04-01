@@ -6,6 +6,7 @@ use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::domain::family::{Family, FamilyMember};
 use crate::domains::family::domain::family_relation::FamilyRelation;
 use crate::domains::family::repositories::family_entity::FamilyEntity;
+use crate::config::actix::AsPgConn;
 use crate::domains::family::domain::family_repository::{DynFamilyRepository, FamilyRepository};
 
 use sqlx::PgConnection;
@@ -264,14 +265,14 @@ impl<'a> FamilyRepository<Transaction<'a, Postgres>> for SqlxFamilyRepository {
 
 #[async_trait]
 impl DynFamilyRepository for SqlxFamilyRepository {
-    async fn get_families_for(&self, conn: &mut PgConnection, username: &str) -> Result<Vec<Family>, Error> {
-        self.get_families_for_inner(&mut *conn, username).await
+    async fn get_families_for(&self, conn: &mut dyn AsPgConn, username: &str) -> Result<Vec<Family>, Error> {
+        self.get_families_for_inner(conn.as_pg_conn(), username).await
     }
-    async fn get_family_by_name(&self, conn: &mut PgConnection, username: &str, name: &str) -> Result<Family, Error> {
-        self.get_family_by_name_inner(&mut *conn, username, name).await
+    async fn get_family_by_name(&self, conn: &mut dyn AsPgConn, username: &str, name: &str) -> Result<Family, Error> {
+        self.get_family_by_name_inner(conn.as_pg_conn(), username, name).await
     }
-    async fn create_family(&self, conn: &mut PgConnection, username: &str, command: &CreateFamilyCommand) -> Result<Family, Error> {
-        self.create_family_inner(&mut *conn, username, command).await
+    async fn create_family(&self, conn: &mut dyn AsPgConn, username: &str, command: &CreateFamilyCommand) -> Result<Family, Error> {
+        self.create_family_inner(conn.as_pg_conn(), username, command).await
     }
 }
 
@@ -302,7 +303,7 @@ mod tests {
                 is_admin: false,
             }],
         };
-        let family = repo.create_family(&mut tx, "alice", &command).await.unwrap();
+        let family = repo.create_family_inner(&mut *tx, "alice", &command).await.unwrap();
         assert_eq!(family.name, "The Alices");
         assert_eq!(family.creator_username, "alice");
         assert_eq!(family.members.len(), 2);
@@ -318,7 +319,7 @@ mod tests {
         sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, $3, $4)")
             .bind(family_id.0).bind(alice_id).bind("PARENT").bind(true)
             .execute(&mut *tx).await.unwrap();
-        let families = repo.get_families_for(&mut tx, "alice").await.unwrap();
+        let families = repo.get_families_for_inner(&mut *tx, "alice").await.unwrap();
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].name, "Alice Family");
     }
@@ -333,8 +334,8 @@ mod tests {
             creator_relation: FamilyRelation::Other,
             members: vec![],
         };
-        repo.create_family(&mut tx, "alice", &command).await.unwrap();
-        let family = repo.get_family_by_name(&mut tx, "alice", "alice club").await.unwrap();
+        repo.create_family_inner(&mut *tx, "alice", &command).await.unwrap();
+        let family = repo.get_family_by_name_inner(&mut *tx, "alice", "alice club").await.unwrap();
         assert_eq!(family.name, "Alice Club");
     }
 }

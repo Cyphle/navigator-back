@@ -1,6 +1,4 @@
-use crate::config::actix::{ActixState, DbConnection};
-use crate::domains::family::domain::family_repository::FamilyRepository;
-use crate::domains::user::domain::user_repository::UserRepository;
+use crate::config::actix::{ActixState, AsPgConn, DbConnection};
 use crate::domains::user::http::user_views::UserView;
 use crate::domains::user::usecases::get_user_info_use_case::get_user_info_use_case;
 use crate::security::token::get_connected_username;
@@ -8,14 +6,12 @@ use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use log::{debug, error};
 
-pub async fn users_info_middleware<DB, U, F>(
+pub async fn users_info_middleware<DB: DbConnection>(
     session: Session,
-    state: web::Data<ActixState<DB, U, F>>,
+    state: web::Data<ActixState<DB>>,
 ) -> impl Responder
 where
-    DB: DbConnection,
-    U: for<'a> UserRepository<<DB as DbConnection>::Tx<'a>>,
-    F: for<'a> FamilyRepository<<DB as DbConnection>::Tx<'a>>,
+    for<'a> <DB as DbConnection>::Tx<'a>: AsPgConn,
 {
     debug!("[Middleware] users me");
 
@@ -36,7 +32,7 @@ where
             })
         }
         Err(e) => {
-            error!("Error getting families: {:?}", e.get_message());
+            error!("Error getting user info: {:?}", e.get_message());
             HttpResponse::InternalServerError().json(e.get_message())
         }
     }

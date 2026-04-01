@@ -1,15 +1,16 @@
-use crate::config::actix::{ActixState, DbConnection};
+use crate::config::actix::{ActixState, AsPgConn, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::domain::family::Family;
-use crate::domains::family::domain::family_repository::FamilyRepository;
-use crate::domains::user::domain::user_repository::UserRepository;
 use actix_web::web;
 
-pub async fn get_families_use_case(
-    state: web::Data<ActixState>,
+pub async fn get_families_use_case<DB: DbConnection>(
+    state: web::Data<ActixState<DB>>,
     username: String,
-) -> Result<Vec<Family>, Box<dyn ApplicationError>> {
+) -> Result<Vec<Family>, Box<dyn ApplicationError>>
+where
+    for<'a> <DB as DbConnection>::Tx<'a>: AsPgConn,
+{
     let mut tx = state
         .db_connection
         .begin()
@@ -24,18 +25,14 @@ pub async fn get_families_use_case(
 }
 
 
-
 #[cfg(test)]
 mod tests {
     use super::get_families_use_case;
     use crate::config::actix::ActixState;
-    use crate::domains::family::repositories::family_entity::FamilyEntity;
+    use crate::domains::family::domain::family::Family;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
-    use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
-    use crate::testing::repositories::mock_user_repository::MockUserRepository;
     use actix_web::web;
-    use crate::domains::family::domain::family::Family;
 
     fn make_state_ok() -> web::Data<MockActixState> {
         mock_actix_state(
@@ -62,8 +59,7 @@ mod tests {
         )
     }
 
-    fn make_state_db_error()
-    -> web::Data<ActixState> {
+    fn make_state_db_error() -> web::Data<ActixState<MockPoolPostgresError>> {
         mock_actix_state(MockPoolPostgresError, MockStateConfig::default())
     }
 

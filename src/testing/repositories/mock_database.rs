@@ -1,10 +1,17 @@
 use std::pin::Pin;
-use crate::config::actix::{DbConnection, DbTransaction};
+use crate::config::actix::{AsPgConn, DbConnection, DbTransaction};
+use sqlx::PgConnection;
 
 pub struct MockPoolPostgres;
 pub struct MockPoolPostgresError;
 
 pub struct MockTransaction;
+
+impl AsPgConn for MockTransaction {
+    fn as_pg_conn(&mut self) -> &mut PgConnection {
+        unimplemented!("MockTransaction has no real PgConnection — repo impls should ignore it")
+    }
+}
 
 // TODO à revoir tous ces mocks. c'est difficile à comprendre
 impl DbTransaction for MockTransaction {

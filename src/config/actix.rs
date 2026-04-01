@@ -2,11 +2,21 @@ use crate::domains::family::domain::family_repository::DynFamilyRepository;
 use crate::domains::user::domain::user_repository::DynUserRepository;
 use crate::security::oidc::OidcConfig;
 use openid::{Client, Discovered, StandardClaims};
-use sqlx::{Pool, Postgres, Transaction};
+use sqlx::{PgConnection, Pool, Postgres, Transaction};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
+
+pub trait AsPgConn: Send {
+    fn as_pg_conn(&mut self) -> &mut PgConnection;
+}
+
+impl<'a> AsPgConn for Transaction<'a, Postgres> {
+    fn as_pg_conn(&mut self) -> &mut PgConnection {
+        &mut **self
+    }
+}
 
 pub trait DbConnection: Send + Sync {
     type Tx<'a>: DbTransaction + Send

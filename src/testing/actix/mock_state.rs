@@ -1,8 +1,8 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::family::domain::family::Family;
-use crate::testing::repositories::mock_database::MockPoolPostgres;
 use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
 use crate::testing::repositories::mock_user_repository::MockUserRepository;
+use crate::testing::repositories::mock_database::MockPoolPostgres;
 use crate::testing::security::oidc::dummy_oidc_config;
 use actix_web::web;
 use std::sync::Arc;
@@ -16,14 +16,10 @@ pub struct MockStateConfig {
     pub family_should_error: bool,
 }
 
-pub fn mock_actix_state<DB>(
-    db_connection: MockPoolPostgres,
+pub fn mock_actix_state<DB: DbConnection>(
+    db_connection: DB,
     config: MockStateConfig,
-) -> web::Data<ActixState>
-where
-    for<'a> DB: DbConnection<Tx<'a> = crate::testing::repositories::mock_database::MockTransaction>
-        + 'static,
-{
+) -> web::Data<ActixState<DB>> {
     web::Data::new(ActixState {
         db_connection,
         oidc_config: dummy_oidc_config(),

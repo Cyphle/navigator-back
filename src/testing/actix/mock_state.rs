@@ -1,5 +1,6 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::family::domain::family::Family;
+use crate::testing::repositories::mock_bank_account_read_repository::MockBankAccountReadRepository;
 use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
 use crate::testing::repositories::mock_user_repository::MockUserRepository;
 use crate::testing::repositories::mock_database::MockPoolPostgres;
@@ -36,5 +37,6 @@ pub fn mock_actix_state<DB: DbConnection>(
             families: config.families.unwrap_or_default(),
             should_error: config.family_should_error,
         }),
+        bank_account_repository: Arc::new(MockBankAccountReadRepository),
     })
 }

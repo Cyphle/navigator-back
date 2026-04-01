@@ -7,6 +7,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
+use crate::domains::bank_account::domain::bank_account_repository::BankAccountReadRepository;
 
 pub trait AsPgConn: Send {
     fn as_pg_conn(&mut self) -> &mut PgConnection;
@@ -74,4 +75,5 @@ where
     pub db_connection: DB,
     pub user_repository: Arc<dyn UserRepository>,
     pub family_repository: Arc<dyn FamilyRepository>,
+    pub bank_account_repository: Arc<dyn BankAccountReadRepository>,
 }

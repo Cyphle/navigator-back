@@ -3,6 +3,7 @@ use crate::domains::common::periodicity::Periodicity;
 use crate::domains::common::visibility::Visibility;
 use chrono::DateTime;
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct BankAccount {
     pub id: i32,
     pub name: String,
@@ -16,6 +17,7 @@ pub struct BankAccount {
     pub expenses: Vec<Expense>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Budget {
     pub id: i32,
     pub name: String,
@@ -26,6 +28,7 @@ pub struct Budget {
     pub expenses: Vec<Expense>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Expense {
     pub id: i32,
     pub description: String,
@@ -34,6 +37,7 @@ pub struct Expense {
     pub debit_date: DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Charge {
     pub id: i32,
     pub description: String,
@@ -42,6 +46,7 @@ pub struct Charge {
     pub periodicity: Periodicity,
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Credit {
     pub id: i32,
     pub description: String,
@@ -49,6 +54,7 @@ pub struct Credit {
     pub date: DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TransactionType {
     Expense,
     Charge,

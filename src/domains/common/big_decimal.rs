@@ -139,13 +139,13 @@ pub fn to_big_decimal(d: Decimal) -> BigDecimal {
     BigDecimal::new(d.to_f64().unwrap_or(0.0), 2, RoundingMode::HalfUp)
 }
 
+pub fn bd(value: f64) -> BigDecimal {
+    BigDecimal::new(value, 2, RoundingMode::HalfUp)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn bd(value: f64) -> BigDecimal {
-        BigDecimal::new(value, 2, RoundingMode::HalfUp)
-    }
 
     // --- Construction & rounding ---
 

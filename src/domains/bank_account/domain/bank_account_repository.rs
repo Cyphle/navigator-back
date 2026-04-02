@@ -11,4 +11,52 @@ pub trait BankAccountReadRepository: Send + Sync {
         username: &str,
         filter: &BankAccountFilter,
     ) -> Result<Vec<BankAccount>, sqlx::Error>;
+
+    // async fn create_bank_account(
+    //     &self,
+    //     conn: &mut dyn AsPgConn,
+    //     username: &str,
+    //     bank_account: BankAccount
+    // ) -> Result<BankAccount, sqlx::Error>;
+    //
+    // async fn add_budget_to_account(
+    //     &self,
+    //     conn: &mut dyn AsPgConn,
+    //     username: &str,
+    //     bank_account_id: i32,
+    //     budget: Budget
+    // ) -> Result<(), sqlx::Error>;
+    //
+    // async fn add_expense_to_account(
+    //     &self,
+    //     conn: &mut dyn AsPgConn,
+    //     username: &str,
+    //     bank_account_id: i32,
+    //     expense: Expense
+    // ) -> Result<(), sqlx::Error>;
+    //
+    // async fn add_charge_to_account(
+    //     &self,
+    //     conn: &mut dyn AsPgConn,
+    //     username: &str,
+    //     bank_account_id: i32,
+    //     charge: Charge
+    // ) -> Result<(), sqlx::Error>;
+    //
+    // async fn add_credit_to_account(
+    //     &self,
+    //     conn: &mut dyn AsPgConn,
+    //     username: &str,
+    //     bank_account_id: i32,
+    //     credit: Credit
+    // ) -> Result<(), sqlx::Error>;
+    //
+    // async fn add_budget_expense_to_account(
+    //     &self,
+    //     conn: &mut dyn AsPgConn,
+    //     username: &str,
+    //     bank_account_id: i32,
+    //     budget_id: i32,
+    //     expense: Expense
+    // ) -> Result<(), sqlx::Error>;
 }

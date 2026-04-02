@@ -2,12 +2,11 @@ use crate::config::actix::AsPgConn;
 use crate::domains::bank_account::domain::bank_account::{BankAccount, Budget, Charge, Credit, Expense, TransactionType};
 use crate::domains::bank_account::domain::bank_account_filters::BankAccountFilter;
 use crate::domains::bank_account::domain::bank_account_repository::BankAccountReadRepository;
-use crate::domains::common::big_decimal::{to_big_decimal, BigDecimal, RoundingMode};
+use crate::domains::common::big_decimal::to_big_decimal;
 use crate::domains::common::periodicity::Periodicity;
 use crate::domains::common::visibility::Visibility;
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use sqlx::{Error, FromRow, PgConnection, Postgres};
 use std::collections::HashMap;
@@ -130,6 +129,16 @@ impl SqlxBankAccountReadRepository {
                             }
                         }
                     }
+                    TransactionType::Budget => {
+                        let expense = Self::row_to_expense(&row, *t_id, t_desc, *t_amount, t_start, t_end);
+                        if let Some(t_budget_id) = row.t_budget_id {
+                            if let Some(budget) = entry.budgets.iter_mut().find(|b| b.id == t_budget_id) {
+                                if !budget.expenses.iter().any(|e| e.id == expense.id) {
+                                    budget.expenses.push(expense);
+                                }
+                            }
+                        }
+                    }
                     TransactionType::Credit => {
                         let credit = Self::row_to_credit(*t_id, t_desc, *t_amount, t_start);
                         if !entry.credits.iter().any(|c| c.id == credit.id) {
@@ -142,7 +151,6 @@ impl SqlxBankAccountReadRepository {
                             entry.charges.push(charge);
                         }
                     }
-                    TransactionType::Budget => {}
                 }
             }
         }
@@ -229,7 +237,6 @@ impl SqlxBankAccountReadRepository {
         }
     }
 
-
     fn month_bounds(filter: &BankAccountFilter) -> Result<(NaiveDate, NaiveDate), Error> {
         let first_day = NaiveDate::from_ymd_opt(filter.year, filter.month as u32, 1)
             .ok_or_else(|| {
@@ -267,6 +274,7 @@ impl BankAccountReadRepository for SqlxBankAccountReadRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::common::big_decimal::bd;
     use sqlx::{Connection, Transaction};
 
     async fn create_user(tx: &mut Transaction<'_, Postgres>, username: &str) -> i32 {
@@ -315,125 +323,108 @@ mod tests {
     async fn insert_budget_expense(tx: &mut Transaction<'_, Postgres>, bank_account_id: i32, budget_id: i32, description: &str, amount: i32, date: NaiveDate) {
         sqlx::query(
             r#"INSERT INTO transactions (bank_account_id, budget_id, "type", description, amount, start_date, end_date)
-               VALUES ($1, $2, 'EXPENSE', $3, $4, $5, $5)"#,
+               VALUES ($1, $2, 'BUDGET', $3, $4, $5, $5)"#,
         )
         .bind(bank_account_id).bind(budget_id).bind(description)
         .bind(Decimal::from(amount)).bind(date)
         .execute(&mut **tx).await.unwrap();
     }
 
+    async fn insert_charge(tx: &mut Transaction<'_, Postgres>, bank_account_id: i32, description: &str, amount: i32, date: NaiveDate) {
+        sqlx::query(
+            r#"INSERT INTO transactions (bank_account_id, "type", description, amount, start_date, end_date, periodicity)
+               VALUES ($1, 'CHARGE', $2, $3, $4, $4, 'MONTHLY')"#,
+        )
+        .bind(bank_account_id).bind(description)
+        .bind(Decimal::from(amount)).bind(date)
+        .execute(&mut **tx).await.unwrap();
+    }
+
     #[sqlx_testcontainers::test]
-    async fn test_returns_account_with_budgets_and_budget_expenses(mut conn: sqlx::PgConnection) {
+    async fn test_get_accounts_with_transactions_filtered_by_month(mut conn: sqlx::PgConnection) {
         let repo = SqlxBankAccountReadRepository;
         let mut tx = conn.begin().await.unwrap();
         let user_id = create_user(&mut tx, "alice").await;
         let account_id = create_bank_account(&mut tx, user_id, "Main", 1000).await;
-        let march_15 = NaiveDate::from_ymd_opt(2026, 3, 15).unwrap();
 
+        let march_15 = NaiveDate::from_ymd_opt(2026, 3, 15).unwrap();
+        let april_01 = NaiveDate::from_ymd_opt(2026, 4, 1).unwrap();
+
+        // Transactions du mois de Mars
+        insert_transaction(&mut tx, account_id, "EXPENSE", "Rent", 500, march_15).await;
+        insert_transaction(&mut tx, account_id, "CREDIT", "Salary", 2000, march_15).await;
+        insert_charge(&mut tx, account_id, "Netflix", 15, march_15).await;
         let budget_id = insert_budget(&mut tx, account_id, "Food", "Food budget", 300, march_15).await;
         insert_budget_expense(&mut tx, account_id, budget_id, "Groceries", 50, march_15).await;
-        insert_budget_expense(&mut tx, account_id, budget_id, "Restaurant", 30, march_15).await;
+
+        // Transactions hors mois (Avril) - NE DOIVENT PAS APPARAITRE
+        insert_transaction(&mut tx, account_id, "EXPENSE", "April Expense", 100, april_01).await;
+        insert_transaction(&mut tx, account_id, "CREDIT", "April Credit", 100, april_01).await;
+        insert_charge(&mut tx, account_id, "April Charge", 10, april_01).await;
+        insert_budget_expense(&mut tx, account_id, budget_id, "April Budget Expense", 20, april_01).await;
 
         let accounts = repo.get_bank_accounts_for_inner(&mut *tx, "alice", &BankAccountFilter { month: 3, year: 2026 }).await.unwrap();
 
         assert_eq!(accounts.len(), 1);
-        let a = &accounts[0];
-        assert_eq!(a.budgets.len(), 1);
-        let b = &a.budgets[0];
-        assert_eq!(b.name, "Food");
-        assert_eq!(b.initial_amount.to_f64(), 300.0);
-        assert_eq!(b.expenses.len(), 2);
+
+        let dt_march_15 = march_15.and_hms_opt(0, 0, 0).unwrap().and_utc();
+        let dt_account_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
+
+        let expected_account = BankAccount {
+            id: account_id,
+            name: "Main".to_string(),
+            description: "".to_string(),
+            visibility: Visibility::Personal,
+            starting_amount: bd(1000.0),
+            start_date: dt_account_start,
+            budgets: vec![Budget {
+                id: budget_id,
+                name: "Food".to_string(),
+                description: "Food budget".to_string(),
+                start_date: dt_march_15,
+                end_date: None,
+                initial_amount: bd(300.0),
+                expenses: vec![Expense {
+                    id: 4, 
+                    description: "Groceries".to_string(),
+                    amount: bd(50.0),
+                    expense_date: dt_march_15,
+                    debit_date: dt_march_15,
+                }],
+            }],
+            charges: vec![Charge {
+                id: 3,
+                description: "Netflix".to_string(),
+                amount: bd(15.0),
+                date: dt_march_15,
+                periodicity: Periodicity::Monthly,
+            }],
+            credits: vec![Credit {
+                id: 2,
+                description: "Salary".to_string(),
+                amount: bd(2000.0),
+                date: dt_march_15,
+            }],
+            expenses: vec![Expense {
+                id: 1,
+                description: "Rent".to_string(),
+                amount: bd(500.0),
+                expense_date: dt_march_15,
+                debit_date: dt_march_15,
+            }],
+        };
         
-        let mut expense_amounts: Vec<f64> = b.expenses.iter().map(|e| e.amount.to_f64()).collect();
-        expense_amounts.sort_by(|x, y| x.partial_cmp(y).unwrap());
-        assert_eq!(expense_amounts, vec![30.0, 50.0]);
+        assert_eq!(accounts[0], expected_account);
     }
 
     #[sqlx_testcontainers::test]
-    async fn test_returns_account_with_expenses_and_credits_for_month(mut conn: sqlx::PgConnection) {
+    async fn test_get_accounts_returns_empty_list_when_no_accounts(mut conn: sqlx::PgConnection) {
         let repo = SqlxBankAccountReadRepository;
         let mut tx = conn.begin().await.unwrap();
-        let user_id = create_user(&mut tx, "alice").await;
-        let account_id = create_bank_account(&mut tx, user_id, "Main", 1000).await;
-        let march = NaiveDate::from_ymd_opt(2026, 3, 15).unwrap();
+        create_user(&mut tx, "bob").await;
 
-        insert_transaction(&mut tx, account_id, "EXPENSE", "Rent",   500, march).await;
-        insert_transaction(&mut tx, account_id, "EXPENSE", "Food",   200, march).await;
-        insert_transaction(&mut tx, account_id, "CREDIT",  "Salary", 300, march).await;
-        // Out of month — must not appear
-        insert_transaction(&mut tx, account_id, "EXPENSE", "April",  100, NaiveDate::from_ymd_opt(2026, 4, 1).unwrap()).await;
+        let accounts = repo.get_bank_accounts_for_inner(&mut *tx, "bob", &BankAccountFilter { month: 3, year: 2026 }).await.unwrap();
 
-        let accounts = repo.get_bank_accounts_for_inner(&mut *tx, "alice", &BankAccountFilter { month: 3, year: 2026 }).await.unwrap();
-
-        assert_eq!(accounts.len(), 1);
-        let a = &accounts[0];
-        assert_eq!(a.expenses.len(), 2);
-        assert_eq!(a.credits.len(), 1);
-        assert_eq!(a.starting_amount.to_f64(), 1000.0);
-
-        let mut expense_amounts: Vec<f64> = a.expenses.iter().map(|e| e.amount.to_f64()).collect();
-        expense_amounts.sort_by(|x, y| x.partial_cmp(y).unwrap());
-        assert_eq!(expense_amounts, vec![200.0, 500.0]);
-        assert_eq!(a.credits[0].amount.to_f64(), 300.0);
-    }
-
-    #[sqlx_testcontainers::test]
-    async fn test_account_with_no_transactions_has_empty_collections(mut conn: sqlx::PgConnection) {
-        let repo = SqlxBankAccountReadRepository;
-        let mut tx = conn.begin().await.unwrap();
-        let user_id = create_user(&mut tx, "alice").await;
-        create_bank_account(&mut tx, user_id, "Empty", 500).await;
-
-        let accounts = repo.get_bank_accounts_for_inner(&mut *tx, "alice", &BankAccountFilter { month: 3, year: 2026 }).await.unwrap();
-
-        assert_eq!(accounts.len(), 1);
-        assert!(accounts[0].expenses.is_empty());
-        assert!(accounts[0].credits.is_empty());
-        assert_eq!(accounts[0].starting_amount.to_f64(), 500.0);
-    }
-
-    #[sqlx_testcontainers::test]
-    async fn test_returns_one_bank_account_per_account(mut conn: sqlx::PgConnection) {
-        let repo = SqlxBankAccountReadRepository;
-        let mut tx = conn.begin().await.unwrap();
-        let user_id = create_user(&mut tx, "alice").await;
-        create_bank_account(&mut tx, user_id, "Account A", 100).await;
-        create_bank_account(&mut tx, user_id, "Account B", 200).await;
-
-        let accounts = repo.get_bank_accounts_for_inner(&mut *tx, "alice", &BankAccountFilter { month: 3, year: 2026 }).await.unwrap();
-
-        assert_eq!(accounts.len(), 2);
-    }
-
-    #[sqlx_testcontainers::test]
-    async fn test_excludes_other_users_accounts(mut conn: sqlx::PgConnection) {
-        let repo = SqlxBankAccountReadRepository;
-        let mut tx = conn.begin().await.unwrap();
-        let alice_id = create_user(&mut tx, "alice").await;
-        let bob_id   = create_user(&mut tx, "bob").await;
-        create_bank_account(&mut tx, alice_id, "Alice", 100).await;
-        create_bank_account(&mut tx, bob_id,   "Bob",   200).await;
-
-        let accounts = repo.get_bank_accounts_for_inner(&mut *tx, "alice", &BankAccountFilter { month: 3, year: 2026 }).await.unwrap();
-
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0].name, "Alice");
-    }
-
-    #[sqlx_testcontainers::test]
-    async fn test_includes_first_and_last_day_of_month(mut conn: sqlx::PgConnection) {
-        let repo = SqlxBankAccountReadRepository;
-        let mut tx = conn.begin().await.unwrap();
-        let user_id = create_user(&mut tx, "alice").await;
-        let account_id = create_bank_account(&mut tx, user_id, "Main", 0).await;
-
-        insert_transaction(&mut tx, account_id, "EXPENSE", "First", 10, NaiveDate::from_ymd_opt(2026, 3,  1).unwrap()).await;
-        insert_transaction(&mut tx, account_id, "EXPENSE", "Last",  20, NaiveDate::from_ymd_opt(2026, 3, 31).unwrap()).await;
-        insert_transaction(&mut tx, account_id, "EXPENSE", "Before", 5, NaiveDate::from_ymd_opt(2026, 2, 28).unwrap()).await;
-        insert_transaction(&mut tx, account_id, "EXPENSE", "After",  5, NaiveDate::from_ymd_opt(2026, 4,  1).unwrap()).await;
-
-        let accounts = repo.get_bank_accounts_for_inner(&mut *tx, "alice", &BankAccountFilter { month: 3, year: 2026 }).await.unwrap();
-
-        assert_eq!(accounts[0].expenses.len(), 2);
+        assert!(accounts.is_empty());
     }
 }

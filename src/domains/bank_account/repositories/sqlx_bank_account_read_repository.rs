@@ -91,15 +91,15 @@ impl SqlxBankAccountReadRepository {
                 account_order.push(row.ba_id);
             }
 
-            let entry = accounts.entry(row.ba_id).or_insert_with(|| Self::row_to_bank_account(&row));
+            let account = accounts.entry(row.ba_id).or_insert_with(|| Self::row_to_bank_account(&row));
 
             if let Some(budget) = Self::row_to_budget(&row) {
-                if !entry.budgets.iter().any(|b| b.id == budget.id) {
-                    entry.budgets.push(budget);
+                if !account.budgets.iter().any(|b| b.id == budget.id) {
+                    account.budgets.push(budget);
                 }
             }
 
-            Self::add_transaction(&row, entry);
+            Self::add_transaction(&row, account);
         }
 
         Ok(account_order.into_iter().filter_map(|id| accounts.remove(&id)).collect())

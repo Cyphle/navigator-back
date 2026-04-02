@@ -10,7 +10,7 @@ use crate::config::database::connect;
 use crate::config::session::actix_session_config;
 use crate::domains::bank_account::http::bank_account_controller::{get_bank_account_summary_endpoint, get_bank_accounts_overviews};
 use crate::domains::calendar::http::calendar_controller::get_calendar_summary_endpoint;
-use crate::domains::bank_account::repositories::sqlx_bank_account_read_repository::SqlxBankAccountReadRepository;
+use crate::domains::bank_account::repositories::sqlx_bank_account_read_repository::SqlxBankAccountRepository;
 use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
 use crate::domains::meal::http::meal_controller::get_meal_summary_endpoint;
 use crate::domains::recipe::http::recipe_controller::get_recipe_summary_endpoint;
@@ -63,7 +63,7 @@ async fn main() -> std::io::Result<()> {
                     // Repositories
                     let user_repository = SqlxUserRepository {};
                     let family_repository = SqlxFamilyRepository {};
-                    let bank_account_repository = SqlxBankAccountReadRepository {};
+                    let bank_account_repository = SqlxBankAccountRepository {};
 
                     // Actix
                     let state = web::Data::new(ActixState {

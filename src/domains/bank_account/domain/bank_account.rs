@@ -62,6 +62,17 @@ pub enum TransactionType {
     Budget,
 }
 
+impl std::fmt::Display for TransactionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransactionType::Expense => write!(f, "EXPENSE"),
+            TransactionType::Charge  => write!(f, "CHARGE"),
+            TransactionType::Credit  => write!(f, "CREDIT"),
+            TransactionType::Budget  => write!(f, "BUDGET"),
+        }
+    }
+}
+
 impl TryFrom<&str> for TransactionType {
     type Error = ();
 

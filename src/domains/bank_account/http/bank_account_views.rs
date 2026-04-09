@@ -1,3 +1,4 @@
+use crate::domains::bank_account::domain::bank_account::BankAccount;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -26,4 +27,20 @@ pub struct BankAccountOverviewView {
     pub total_credits: f64,
     pub total_expenses: f64,
     pub budgets: Vec<BudgetOverviewView>,
+}
+
+impl From<&BankAccount> for BankAccountOverviewView {
+    fn from(bank_account: &BankAccount) -> Self {
+        Self {
+            id: bank_account.id,
+            name: bank_account.name.clone(),
+            visibility: bank_account.visibility.to_string(),
+            starting_amount: bank_account.starting_amount.to_f64(),
+            actual_amount: 0.0,
+            remaining_amount: 0.0,
+            total_credits: 0.0,
+            total_expenses: 0.0,
+            budgets: vec![],
+        }
+    }
 }

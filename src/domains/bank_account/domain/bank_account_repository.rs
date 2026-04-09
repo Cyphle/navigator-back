@@ -1,8 +1,9 @@
 use crate::config::actix::AsPgConn;
-use crate::domains::bank_account::domain::bank_account::{BankAccount, Budget, Charge, Credit, Expense};
 use crate::domains::bank_account::domain::bank_account_filters::BankAccountFilter;
 use async_trait::async_trait;
+use crate::domains::bank_account::domain::bank_account::BankAccount;
 use crate::domains::bank_account::domain::bank_account_command::{AddChargeToAccountCommand, AddCreditToAccountCommand, AddExpenseToAccountCommand, AddExpenseToBudgetCommand, CreateBankAccountCommand};
+use crate::domains::bank_account::domain::budget::Budget;
 
 #[async_trait]
 pub trait BankAccountRepository: Send + Sync {

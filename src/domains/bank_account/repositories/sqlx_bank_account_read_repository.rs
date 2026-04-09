@@ -1,5 +1,5 @@
 use crate::config::actix::AsPgConn;
-use crate::domains::bank_account::domain::bank_account::{BankAccount, Budget, Charge, Credit, Expense, TransactionType};
+use crate::domains::bank_account::domain::bank_account::{BankAccount};
 use crate::domains::bank_account::domain::bank_account_command::{AddChargeToAccountCommand, AddCreditToAccountCommand, AddExpenseToAccountCommand, AddExpenseToBudgetCommand, CreateBankAccountCommand};
 use crate::domains::bank_account::domain::bank_account_filters::BankAccountFilter;
 use crate::domains::bank_account::domain::bank_account_repository::BankAccountRepository;
@@ -7,10 +7,15 @@ use crate::domains::common::big_decimal::{BigDecimal, to_big_decimal};
 use crate::domains::common::periodicity::Periodicity;
 use crate::domains::common::visibility::Visibility;
 use async_trait::async_trait;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use sqlx::{Error, FromRow, PgConnection, Postgres};
 use std::collections::HashMap;
+use crate::domains::bank_account::domain::budget::Budget;
+use crate::domains::bank_account::domain::charge::Charge;
+use crate::domains::bank_account::domain::credit::Credit;
+use crate::domains::bank_account::domain::expense::Expense;
+use crate::domains::bank_account::domain::transaction_type::TransactionType;
 
 #[derive(Debug, FromRow)]
 struct BankAccountEntity {
@@ -181,7 +186,7 @@ impl SqlxBankAccountRepository {
         .bind(&budget.name)
         .bind(&budget.description)
         .bind(budget.start_date.date_naive())
-        .bind(budget.end_date.map(|d| d.date_naive()))
+        .bind(budget.end_date.map(|d: DateTime<Utc>| d.date_naive()))
         .bind(Self::bd_to_decimal(&budget.initial_amount)?)
         .execute(&mut *conn)
         .await?;

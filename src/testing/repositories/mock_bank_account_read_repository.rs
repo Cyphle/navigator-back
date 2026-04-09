@@ -1,9 +1,10 @@
 use crate::config::actix::AsPgConn;
-use crate::domains::bank_account::domain::bank_account::{BankAccount, Budget};
+use crate::domains::bank_account::domain::bank_account::BankAccount;
 use crate::domains::bank_account::domain::bank_account_command::{AddChargeToAccountCommand, AddCreditToAccountCommand, AddExpenseToAccountCommand, AddExpenseToBudgetCommand, CreateBankAccountCommand};
 use crate::domains::bank_account::domain::bank_account_filters::BankAccountFilter;
 use crate::domains::bank_account::domain::bank_account_repository::BankAccountRepository;
 use async_trait::async_trait;
+use crate::domains::bank_account::domain::budget::Budget;
 
 pub struct MockBankAccountReadRepository;
 

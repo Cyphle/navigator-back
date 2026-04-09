@@ -24,6 +24,10 @@ impl BigDecimal {
         }
     }
 
+    pub fn from(value: f64) -> Self {
+        Self::new(value, 2, RoundingMode::HalfUp)
+    }
+
     pub fn to_f64(&self) -> f64 {
         self.value
     }

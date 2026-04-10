@@ -15,7 +15,7 @@ use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepo
 use crate::domains::meal::http::meal_controller::get_meal_summary_endpoint;
 use crate::domains::recipe::http::recipe_controller::get_recipe_summary_endpoint;
 use crate::domains::shopping_list::http::shopping_list_controller::get_shopping_list_summary_endpoint;
-use crate::domains::todo::http::todo_controller::get_todo_summary_endpoint;
+use crate::domains::magic_list::http::magic_list_controller::get_magic_list_summary_endpoint;
 use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
 use domains::user::usecases::register_use_case::register;
@@ -91,7 +91,7 @@ async fn main() -> std::io::Result<()> {
                             .service(get_families_endpoint)
                             .service(create_family_endpoint)
                             .service(get_calendar_summary_endpoint)
-                            .service(get_todo_summary_endpoint)
+                            .service(get_magic_list_summary_endpoint)
                             .service(get_recipe_summary_endpoint)
                             .service(get_shopping_list_summary_endpoint)
                             .service(get_meal_summary_endpoint)

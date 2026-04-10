@@ -2,6 +2,7 @@ use std::pin::Pin;
 use crate::config::actix::{AsPgConn, DbConnection, DbTransaction};
 use sqlx::PgConnection;
 
+#[derive(Clone)]
 pub struct MockPoolPostgres;
 pub struct MockPoolPostgresError;
 
@@ -26,6 +27,12 @@ impl DbTransaction for MockTransaction {
         Self: 'a,
     {
         Box::pin(async { Ok(()) })
+    }
+}
+
+impl AsPgConn for MockPoolPostgres {
+    fn as_pg_conn(&mut self) -> &mut PgConnection {
+        unimplemented!("MockPoolPostgres has no real PgConnection")
     }
 }
 

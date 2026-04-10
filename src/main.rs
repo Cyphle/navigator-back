@@ -11,11 +11,12 @@ use crate::config::session::actix_session_config;
 use crate::domains::bank_account::http::bank_account_controller::{get_bank_account_summary_endpoint, get_bank_accounts_overviews};
 use crate::domains::calendar::http::calendar_controller::get_calendar_summary_endpoint;
 use crate::domains::bank_account::repositories::sqlx_bank_account_read_repository::SqlxBankAccountRepository;
+use crate::domains::magic_list::repositories::sqlx_magic_list_repository::SqlxMagicListRepository;
 use crate::domains::family::repositories::family_sqlx_repository::SqlxFamilyRepository;
 use crate::domains::meal::http::meal_controller::get_meal_summary_endpoint;
 use crate::domains::recipe::http::recipe_controller::get_recipe_summary_endpoint;
 use crate::domains::shopping_list::http::shopping_list_controller::get_shopping_list_summary_endpoint;
-use crate::domains::magic_list::http::magic_list_controller::get_magic_list_summary_endpoint;
+use crate::domains::magic_list::http::magic_list_controller::{get_magic_list_summary_endpoint, create_magic_list_endpoint};
 use crate::security::controllers::login::login;
 use crate::security::controllers::logout::logout;
 use domains::user::usecases::register_use_case::register;
@@ -64,6 +65,7 @@ async fn main() -> std::io::Result<()> {
                     let user_repository = SqlxUserRepository {};
                     let family_repository = SqlxFamilyRepository {};
                     let bank_account_repository = SqlxBankAccountRepository {};
+                    let magic_list_repository = SqlxMagicListRepository { pool: connection.clone() };
 
                     // Actix
                     let state = web::Data::new(ActixState {
@@ -74,6 +76,7 @@ async fn main() -> std::io::Result<()> {
                         user_repository: Arc::new(user_repository),
                         family_repository: Arc::new(family_repository),
                         bank_account_repository: Arc::new(bank_account_repository),
+                        magic_list_repository: Arc::new(magic_list_repository),
                     });
 
                     info!("Starting Actix server...");
@@ -92,6 +95,7 @@ async fn main() -> std::io::Result<()> {
                             .service(create_family_endpoint)
                             .service(get_calendar_summary_endpoint)
                             .service(get_magic_list_summary_endpoint)
+                            .service(create_magic_list_endpoint)
                             .service(get_recipe_summary_endpoint)
                             .service(get_shopping_list_summary_endpoint)
                             .service(get_meal_summary_endpoint)

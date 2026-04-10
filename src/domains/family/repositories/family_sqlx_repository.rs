@@ -11,7 +11,7 @@ use crate::domains::family::domain::family_repository::FamilyRepository;
 
 use sqlx::PgConnection;
 
-pub struct SqlxFamilyRepository;
+pub struct SqlxFamilyRepository; // TODO en fait il faut mettre le pool dans la structure c'est bien comme magic list repository
 
 impl SqlxFamilyRepository {
     async fn get_families_for_inner(

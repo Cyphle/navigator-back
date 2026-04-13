@@ -38,13 +38,11 @@ pub async fn get_username_from_session(
     let bearer = session.get::<Bearer>(USER_SESSION_KEY);
 
     match bearer {
-        Ok(bearer) => match bearer {
-            Some(bearer) => get_username_from_bearer(client, &bearer).await,
-            None => {
-                error!("No bearer token found in session");
-                None
-            }
-        },
+        Ok(Some(bearer)) => get_username_from_bearer(client, &bearer).await,
+        Ok(None) => {
+            error!("No bearer token found in session");
+            None
+        }
         Err(e) => {
             error!("Error getting bearer token from session: {}", e);
             None
@@ -62,14 +60,9 @@ where
         return Some(username);
     }
 
-    let oidc_client = state.oidc_client.clone();
-    match oidc_client {
-        Some(client) => {
-            let client = client.lock().unwrap();
-            get_username_from_session(&client, &session).await
-        }
-        None => None,
-    }
+    let client = state.oidc_client.clone()?;
+    let client = client.lock().unwrap();
+    get_username_from_session(&client, &session).await
 }
 
 // Structure for the token response
@@ -95,19 +88,15 @@ pub async fn get_admin_access_token(
         .send()
         .await;
 
-    match token_request {
-        Ok(response) => {
-            match response.json::<TokenResponse>().await {
-                Ok(response) => Ok(response.access_token),
-                Err(e) => {
-                    error!("Error getting access token: {}", e);
-                    Err(Box::new(e))
-                }
-            }
-        }
-        Err(e) => {
+    let response = token_request.map_err(|e| {
+        error!("Error getting access token: {}", e);
+        Box::new(e) as Box<dyn std::error::Error>
+    })?;
+
+    response.json::<TokenResponse>().await
+        .map(|r| r.access_token)
+        .map_err(|e| {
             error!("Error getting access token: {}", e);
-            Err(Box::new(e))
-        }
-    }
+            Box::new(e) as Box<dyn std::error::Error>
+        })
 }

@@ -20,39 +20,35 @@ async fn logout(
     let client = state.oidc_client.as_ref().unwrap().lock().unwrap();
     let logout_uri: &str = state.oidc_config.logout_uri.as_ref();
 
-    match user_session {
-        Ok(bearer_opt) => match bearer_opt {
-            Some(bearer) => {
-                match build_logout_url(&client, &bearer.clone().id_token.unwrap(), logout_uri).await {
-                    Ok(logout_url) => {
-                        session.remove(USER_SESSION_KEY);
-                        info!("Redirecting to logout URL: {}", logout_url);
-
-                        // TODO y a un petit truc qui est pas bien géré pour finir le logout. Mais sinon ça marche
-                        return HttpResponse::PermanentRedirect()
-                            .append_header(("Location", logout_url.to_string()))
-                            .finish();
-                    }
-                    Err(e) => {
-                        error!("Error generating logout URL: {}", e);
-                        session.remove(USER_SESSION_KEY);
-                    }
-                }
-            }
-            None => {
-                error!("No session repositories found");
-            }
-        },
+    let bearer = match user_session {
         Err(e) => {
             error!("No session repositories found: {}", e);
             return HttpResponse::PermanentRedirect()
                 .append_header(("Location", "/"))
                 .finish();
         }
-    }
+        Ok(None) => {
+            error!("No session repositories found");
+            return HttpResponse::Ok().body("Logged out");
+        }
+        Ok(Some(b)) => b,
+    };
 
-    HttpResponse::Ok()
-        .body("Logged out")
+    match build_logout_url(&client, &bearer.clone().id_token.unwrap(), logout_uri).await {
+        Ok(logout_url) => {
+            session.remove(USER_SESSION_KEY);
+            info!("Redirecting to logout URL: {}", logout_url);
+            // TODO y a un petit truc qui est pas bien géré pour finir le logout. Mais sinon ça marche
+            HttpResponse::PermanentRedirect()
+                .append_header(("Location", logout_url.to_string()))
+                .finish()
+        }
+        Err(e) => {
+            error!("Error generating logout URL: {}", e);
+            session.remove(USER_SESSION_KEY);
+            HttpResponse::Ok().body("Logged out")
+        }
+    }
 }
 
 pub async fn build_logout_url(

@@ -33,25 +33,27 @@ where
         .await
         .ok_or(MissingUsernameError);
 
-    match username {
-        Ok(username) => match get_families(state, username).await {
-            Ok(families) => {
-                let views = families
-                    .into_iter()
-                    .map(|family| FamilyView { name: family.name })
-                    .collect::<Vec<_>>();
-                HttpResponse::Ok().json(views)
-            }
-            Err(e) => {
-                error!("Error getting families: {:?}", e.get_message());
-                HttpResponse::InternalServerError().json(e.get_message())
-            }
-        },
+    let username = match username {
+        Ok(u) => u,
         Err(e) => {
             error!("Error getting families: {:?}", e.get_message());
-            HttpResponse::InternalServerError().json(e.get_message())
+            return HttpResponse::InternalServerError().json(e.get_message());
         }
-    }
+    };
+
+    get_families(state, username)
+        .await
+        .map(|families| {
+            let views = families
+                .into_iter()
+                .map(|family| FamilyView { name: family.name })
+                .collect::<Vec<_>>();
+            HttpResponse::Ok().json(views)
+        })
+        .unwrap_or_else(|e| {
+            error!("Error getting families: {:?}", e.get_message());
+            HttpResponse::InternalServerError().json(e.get_message())
+        })
 }
 
 pub async fn create_family_middleware<DB, CreateFamily, Fut>(
@@ -70,33 +72,31 @@ where
         .await
         .ok_or(MissingUsernameError);
 
-    match username {
-        Ok(username) => match create_family(
-            state,
-            username,
-            CreateFamilyCommand {
-                name: request.name,
-                creator_relation: FamilyRelation::from_str(&request.creator_relation),
-                members: request.members.into_iter().map(|m| CreateFamilyMemberCommand {
-                    username_or_email: m.username_or_email,
-                    relation: FamilyRelation::from_str(&m.relation),
-                    is_admin: m.is_admin
-                }).collect()
-            },
-        )
-        .await
-        {
-            Ok(_) => HttpResponse::Ok().finish(),
-            Err(e) => {
-                error!("Error creating family: {:?}", e.get_message());
-                HttpResponse::InternalServerError().json(e.get_message())
-            }
-        },
+    let username = match username {
+        Ok(u) => u,
         Err(e) => {
             error!("Error creating family: {:?}", e.get_message());
-            HttpResponse::InternalServerError().json(e.get_message())
+            return HttpResponse::InternalServerError().json(e.get_message());
         }
-    }
+    };
+
+    let command = CreateFamilyCommand {
+        name: request.name,
+        creator_relation: FamilyRelation::from_str(&request.creator_relation),
+        members: request.members.into_iter().map(|m| CreateFamilyMemberCommand {
+            username_or_email: m.username_or_email,
+            relation: FamilyRelation::from_str(&m.relation),
+            is_admin: m.is_admin,
+        }).collect(),
+    };
+
+    create_family(state, username, command)
+        .await
+        .map(|_| HttpResponse::Ok().finish())
+        .unwrap_or_else(|e| {
+            error!("Error creating family: {:?}", e.get_message());
+            HttpResponse::InternalServerError().json(e.get_message())
+        })
 }
 
 #[cfg(test)]

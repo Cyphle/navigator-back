@@ -52,59 +52,50 @@ pub async fn register(
         .create_user(&mut tx, &command)
         .await;
 
-    match result {
-        Ok(user) => {
-            match state.oidc_client.as_ref() {
-                Some(client) => {
-                    if let Err(e) = tx.commit().await {
-                        let error_msg: String = e.to_string();
-                        return HttpResponse::InternalServerError().body(error_msg);
-                    }
+    let user = match result {
+        Ok(u) => u,
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
 
-                    let client = client.lock().unwrap();
-                    let admin_token = get_admin_access_token(&client, &state.oidc_config.admin).await.unwrap();
-
-                    let new_user = KeycloakUser {
-                        username: user.username.clone(),
-                        email: user.email.clone(),
-                        enabled: true,
-                        credentials: vec![KeycloakCredential {
-                            r#type: "password".to_string(),
-                            value: command.password.clone(),
-                            temporary: false,
-                        }],
-                    };
-
-                    match HttpClient::new()
-                        .post(&state.oidc_config.admin.create_user_url)
-                        .bearer_auth(admin_token)
-                        .json(&new_user)
-                        .send()
-                        .await {
-                        Ok(response) => {
-                            let status = response.status();
-                            let body = response.text().await.unwrap_or_default();
-
-                            if status.is_success() {
-                                info!("User created in keycloak: status={}, body={}", status, body);
-                            } else {
-                                error!("Keycloak create user failed: status={}, body={}", status, body);
-                            }
-                        }
-                        Err(e) => {
-                            error!("Error creating user in keycloak: {:?}", e);
-                        }
-                    }
-                },
-                None => {
-                    error!("OIDC client not found");
-                },
-            }
-        },
-        Err(e) => {
-            let error_msg: String = e.to_string();
-            return HttpResponse::InternalServerError().body(error_msg);
+    if let Some(client) = state.oidc_client.as_ref() {
+        if let Err(e) = tx.commit().await {
+            return HttpResponse::InternalServerError().body(e.to_string());
         }
+
+        let client = client.lock().unwrap();
+        let admin_token = get_admin_access_token(&client, &state.oidc_config.admin).await.unwrap();
+
+        let new_user = KeycloakUser {
+            username: user.username.clone(),
+            email: user.email.clone(),
+            enabled: true,
+            credentials: vec![KeycloakCredential {
+                r#type: "password".to_string(),
+                value: command.password.clone(),
+                temporary: false,
+            }],
+        };
+
+        match HttpClient::new()
+            .post(&state.oidc_config.admin.create_user_url)
+            .bearer_auth(admin_token)
+            .json(&new_user)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                if status.is_success() {
+                    info!("User created in keycloak: status={}, body={}", status, body);
+                } else {
+                    error!("Keycloak create user failed: status={}, body={}", status, body);
+                }
+            }
+            Err(e) => error!("Error creating user in keycloak: {:?}", e),
+        }
+    } else {
+        error!("OIDC client not found");
     }
 
     HttpResponse::Created().finish()

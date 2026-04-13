@@ -25,9 +25,10 @@ pub async fn add_item_to_magic_list_use_case<DB: DbConnection>(
     let authorized = if magic_list.owner_username == username {
         true
     } else if magic_list.visibility == Visibility::Shared {
-        match magic_list.family_id {
-            Some(family_id) => state.magic_list_repository.is_family_member(&username, family_id).await?,
-            None => false,
+        if let Some(family_id) = magic_list.family_id {
+            state.magic_list_repository.is_family_member(&username, family_id).await?
+        } else {
+            false
         }
     } else {
         false

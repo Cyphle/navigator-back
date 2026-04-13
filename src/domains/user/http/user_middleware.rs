@@ -21,21 +21,19 @@ where
         return HttpResponse::Unauthorized().finish();
     }
 
-    match get_user_info_use_case(state, username).await {
-        Ok(user) => {
-            HttpResponse::Ok().json(UserView {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                first_name: user.first_name,
-                last_name: user.last_name,
-            })
-        }
-        Err(e) => {
+    get_user_info_use_case(state, username)
+        .await
+        .map(|user| HttpResponse::Ok().json(UserView {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+        }))
+        .unwrap_or_else(|e| {
             error!("Error getting user info: {:?}", e.get_message());
             HttpResponse::InternalServerError().json(e.get_message())
-        }
-    }
+        })
 }
 
 #[cfg(test)]

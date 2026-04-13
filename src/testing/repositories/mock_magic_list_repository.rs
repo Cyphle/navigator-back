@@ -7,7 +7,7 @@ pub struct MockMagicListRepository;
 
 #[async_trait]
 impl MagicListRepository for MockMagicListRepository {
-    async fn create(&self, _command: CreateMagicListCommand) -> Result<(), Box<dyn ApplicationError>> {
+    async fn create(&self, _username: &String, _command: CreateMagicListCommand) -> Result<(), Box<dyn ApplicationError>> {
         Ok(())
     }
 }

@@ -12,13 +12,13 @@ pub struct SqlxMagicListRepository {
 #[async_trait]
 impl MagicListRepository for SqlxMagicListRepository {
     async fn create(&self, username: &String, command: CreateMagicListCommand) -> Result<(), Box<dyn ApplicationError>> {
-        let owner_id = sqlx::query_as(
-            "SELECT id, username, email FROM users WHERE username = $1",
+        let owner_id: (i32,) = sqlx::query_as(
+            "SELECT id FROM users WHERE username = $1",
         )
             .bind(username)
             .fetch_one(&self.pool)
             .await
-            .or_else(|e| Err(Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>))?;
+            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
 
         sqlx::query(
             "INSERT INTO magic_list (name, type, visibility, owner_id, family_id, excluded_user_ids) VALUES ($1, $2, $3, $4, $5, $6)"
@@ -26,7 +26,7 @@ impl MagicListRepository for SqlxMagicListRepository {
         .bind(command.name)
         .bind(command.magic_list_type.to_string())
         .bind(command.visibility.to_string())
-        .bind(owner_id)
+        .bind(owner_id.0)
         .bind(command.family_id)
         .bind(command.excluded_member_ids)
         .execute(&self.pool)

@@ -1,7 +1,7 @@
 # Create an Endpoint with its Middleware
 
 ## Short description (for LLMs)
-Creates a thin Actix-Web controller + middleware pair for a new HTTP endpoint following the navigator-back pattern: controller delegates immediately to middleware, middleware handles session extraction and HTTP response mapping, tests use `spy!` to assert the use case is called.
+Creates a thin Actix-Web controller + middleware pair for a new HTTP endpoint following the navigator-back pattern: controller delegates immediately to middleware, middleware handles session extraction and HTTP response mapping, tests use `spy!` to assert the use case is called. All endpoints must comply with REST level 2 (resources as nouns in URLs, HTTP verbs for actions, meaningful status codes).
 
 ## Persona
 Tu es un ingénieur backend Rust travaillant sur navigator-back. Tu gardes les controllers aussi fins que possible (2–3 lignes de code) et tu places toute la logique de la couche HTTP — lecture de session, mapping de réponse, gestion d'erreurs — dans la fonction middleware. Tu ne mets jamais de logique métier dans ces deux couches.
@@ -22,7 +22,57 @@ src/domains/<domain>/http/<domain>_views.rs        # structs de réponse JSON
 ```
 Les exposer dans `src/domains/<domain>/http/mod.rs`.
 
-### 2. Controller (ultra-thin)
+### 2. REST niveau 2 — règles obligatoires
+
+**URLs : noms de ressources, jamais de verbes**
+```
+// Bien
+GET    /families              # liste
+GET    /families/{id}         # détail
+POST   /families              # création
+PUT    /families/{id}         # remplacement complet
+PATCH  /families/{id}         # mise à jour partielle
+DELETE /families/{id}         # suppression
+
+// Mal
+GET  /getFamilies
+POST /createFamily
+POST /families/delete
+```
+
+**Verbes HTTP et codes de statut correspondants**
+
+| Action | Méthode | Succès | Erreur client | Erreur serveur |
+|---|---|---|---|---|
+| Lire une collection | `GET` | `200 Ok` | `401 Unauthorized` | `500 Internal Server Error` |
+| Lire une ressource | `GET` | `200 Ok` | `404 Not Found` | `500 Internal Server Error` |
+| Créer | `POST` | `201 Created` | `400 Bad Request` | `500 Internal Server Error` |
+| Remplacer | `PUT` | `200 Ok` | `404 Not Found` | `500 Internal Server Error` |
+| Modifier | `PATCH` | `200 Ok` | `404 Not Found` | `500 Internal Server Error` |
+| Supprimer | `DELETE` | `204 No Content` | `404 Not Found` | `500 Internal Server Error` |
+
+Dans le middleware, utiliser le code de statut sémantiquement correct :
+```rust
+// Création réussie
+HttpResponse::Created().json(view)
+
+// Suppression réussie
+HttpResponse::NoContent().finish()
+
+// Ressource non trouvée
+HttpResponse::NotFound().json(e.get_message())
+
+// Requête invalide (validation échouée)
+HttpResponse::BadRequest().json(e.get_message())
+```
+
+**Ressources imbriquées** pour les relations parent/enfant :
+```
+GET  /families/{id}/members      # membres d'une famille
+POST /families/{id}/members      # ajouter un membre
+```
+
+### 3. Controller (ultra-thin)
 Le controller déclare uniquement la route et délègue au middleware :
 ```rust
 #[get("/<route>")]
@@ -160,7 +210,10 @@ Dans `main.rs` (ou le fichier de configuration des routes du domaine), ajouter :
 .service(<verb>_<noun>_endpoint)
 ```
 
-### 8. Checklist avant de finir
+### 9. Checklist avant de finir
+- [ ] URL en noms de ressources, aucun verbe dans le chemin
+- [ ] Verbe HTTP correct pour l'action (GET / POST / PUT / PATCH / DELETE)
+- [ ] Code de statut HTTP sémantiquement correct (201, 204, 404, 400…)
 - [ ] Controller ≤ 5 lignes par endpoint, aucune logique
 - [ ] Middleware générique sur `DB` et le use case `Fn`
 - [ ] Extraction de session via `get_connected_username`

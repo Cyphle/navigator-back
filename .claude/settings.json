@@ -3,8 +3,21 @@
     "allow": [
       "Bash(cargo test *)",
       "Bash(cargo test)",
+      "Bash(cargo build)",
       "Grep",
       "Read"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/cyrilphamle/Documents/Workspace/Navigator/navigator-back && cargo build 2>&1 && cargo test 2>&1"
+          }
+        ]
+      }
     ]
   }
 }

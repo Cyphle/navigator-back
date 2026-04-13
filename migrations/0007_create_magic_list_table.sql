@@ -7,21 +7,21 @@ ALTER TABLE IF EXISTS bank_accounts
     REFERENCES families(id);
 
 
-ALTER TABLE DROP CONSTRAINT IF EXISTS budgets_bank_account_id_fkey;
+ALTER TABLE IF EXISTS budgets DROP CONSTRAINT IF EXISTS budgets_bank_account_id_fkey;
 ALTER TABLE IF EXISTS budgets
     ADD CONSTRAINT budgets_bank_account_id_fkey
     FOREIGN KEY (bank_account_id)
     REFERENCES bank_accounts(id)
     ON DELETE CASCADE;
 
-ALTER TABLE DROP CONSTRAINT IF EXISTS transactions_bank_account_id_fkey;
+ALTER TABLE IF EXISTS transactions DROP CONSTRAINT IF EXISTS transactions_bank_account_id_fkey;
 ALTER TABLE IF EXISTS transactions
     ADD CONSTRAINT transactions_bank_account_id_fkey
     FOREIGN KEY (bank_account_id)
     REFERENCES bank_accounts(id)
     ON DELETE CASCADE;
 
-ALTER TABLE DROP CONSTRAINT IF EXISTS transactions_budget_id_fkey;
+ALTER TABLE IF EXISTS transactions DROP CONSTRAINT IF EXISTS transactions_budget_id_fkey;
 ALTER TABLE IF EXISTS transactions
     ADD CONSTRAINT transactions_budget_id_fkey
     FOREIGN KEY (budget_id)
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS magic_list (
     name VARCHAR(255) NOT NULL,
     type VARCHAR(30) NOT NULL,
     visibility VARCHAR(30) NOT NULL,
-    owner_id: INTEGER NOT NULL,
+    owner_id INTEGER NOT NULL,
     family_id INTEGER,
     excluded_user_ids INTEGER[],
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

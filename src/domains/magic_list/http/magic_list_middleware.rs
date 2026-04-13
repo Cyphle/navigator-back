@@ -123,6 +123,8 @@ mod tests {
 
         // Then
         assert_eq!(resp.status(), StatusCode::CREATED);
+        drop(app);
+        drop(spy_handler);
         let snapshot = spy.snapshot();
         assert_eq!(snapshot.num_of_calls(), 1);
     }

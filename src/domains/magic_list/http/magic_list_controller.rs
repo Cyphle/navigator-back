@@ -1,7 +1,9 @@
 use crate::config::actix::ActixState;
+use crate::domains::magic_list::http::magic_list_item_middleware::add_item_to_magic_list_middleware;
 use crate::domains::magic_list::http::magic_list_middleware::create_magic_list_middleware;
-use crate::domains::magic_list::http::magic_list_requests::CreateMagicListRequest;
+use crate::domains::magic_list::http::magic_list_requests::{CreateMagicListItemRequest, CreateMagicListRequest};
 use crate::domains::magic_list::http::magic_list_views::MagicListSummaryView;
+use crate::domains::magic_list::usecases::add_item_to_magic_list_use_case::add_item_to_magic_list_use_case;
 use crate::domains::magic_list::usecases::create_magic_list_use_case::create_magic_list_use_case;
 use actix_session::Session;
 use actix_web::{get, post, web, HttpResponse, Responder};
@@ -32,5 +34,23 @@ pub async fn create_magic_list_endpoint(
         family_id.into_inner(),
         payload.into_inner(),
         create_magic_list_use_case
+    ).await
+}
+
+#[post("/families/{family_id}/magic-lists/{magic_list_id}/items")]
+pub async fn add_item_to_magic_list_endpoint(
+    payload: web::Json<CreateMagicListItemRequest>,
+    session: Session,
+    state: web::Data<ActixState>,
+    path: web::Path<(i32, i32)>,
+) -> impl Responder {
+    let (family_id, magic_list_id) = path.into_inner();
+    debug!("[Controller] Create item in magic list {} for family {}", magic_list_id, family_id);
+    add_item_to_magic_list_middleware(
+        session,
+        state,
+        magic_list_id,
+        payload.into_inner(),
+        add_item_to_magic_list_use_case
     ).await
 }

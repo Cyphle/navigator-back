@@ -4,3 +4,4 @@ pub mod magic_list;
 pub mod magic_list_item_status;
 pub mod magic_list_repository;
 pub mod magic_list_type;
+pub mod update_magic_list_item_command;

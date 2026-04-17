@@ -18,3 +18,13 @@ pub struct CreateMagicListItemRequest {
     pub due_date: Option<String>,
     pub status: Option<String>,
 }
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateMagicListItemRequest {
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub checked: Option<bool>,
+    pub due_date: Option<String>,
+    pub status: Option<String>,
+}

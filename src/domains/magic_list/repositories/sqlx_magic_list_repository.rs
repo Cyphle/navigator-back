@@ -5,6 +5,7 @@ use crate::domains::magic_list::domain::create_magic_list_command::CreateMagicLi
 use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMagicListItemCommand;
 use crate::domains::magic_list::domain::magic_list::MagicList;
 use crate::domains::magic_list::domain::magic_list_repository::MagicListRepository;
+use crate::domains::magic_list::domain::update_magic_list_item_command::UpdateMagicListItemCommand;
 use async_trait::async_trait;
 use sqlx::{PgConnection, Pool, Postgres};
 
@@ -78,6 +79,31 @@ impl SqlxMagicListRepository {
 
         Ok(())
     }
+
+    async fn update_item_inner(&self, conn: &mut PgConnection, magic_list_id: i32, item_id: i32, command: UpdateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
+        sqlx::query(
+            "UPDATE magic_list_item \
+             SET title = COALESCE($1, title), \
+                 content = COALESCE($2, content), \
+                 checked = COALESCE($3, checked), \
+                 due_date = COALESCE($4, due_date), \
+                 status = COALESCE($5, status), \
+                 updated_at = NOW() \
+             WHERE id = $6 AND magic_list_id = $7"
+        )
+        .bind(&command.title)
+        .bind(&command.content)
+        .bind(command.checked)
+        .bind(command.due_date)
+        .bind(command.status.as_ref().map(|s| s.to_string()))
+        .bind(item_id)
+        .bind(magic_list_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -123,6 +149,12 @@ impl MagicListRepository for SqlxMagicListRepository {
         let mut conn = self.pool.acquire().await
             .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
         self.add_item_inner(&mut *conn, magic_list_id, command).await
+    }
+
+    async fn update_item(&self, magic_list_id: i32, item_id: i32, command: UpdateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
+        let mut conn = self.pool.acquire().await
+            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        self.update_item_inner(&mut *conn, magic_list_id, item_id, command).await
     }
 }
 
@@ -223,5 +255,43 @@ mod tests {
         let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM magic_list_item WHERE magic_list_id = $1")
             .bind(ml_id).fetch_one(&mut *tx).await.unwrap();
         assert_eq!(count.0, 1);
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_update_item(mut conn: sqlx::PgConnection) {
+        let repo = SqlxMagicListRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
+        let mut tx = conn.begin().await.unwrap();
+        let user_id = create_user(&mut tx, "alice").await;
+        let ml_id = create_magic_list(&mut tx, user_id, "PERSONAL", None).await;
+
+        let add_command = CreateMagicListItemCommand {
+            title: "Original".to_string(),
+            content: Some("Original content".to_string()),
+            checked: Some(false),
+            due_date: None,
+            status: Some(MagicListItemStatus::Todo),
+        };
+        repo.add_item_inner(&mut *tx, ml_id, add_command).await.unwrap();
+
+        let item_id: (i32,) = sqlx::query_as("SELECT id FROM magic_list_item WHERE magic_list_id = $1")
+            .bind(ml_id).fetch_one(&mut *tx).await.unwrap();
+
+        let update_command = UpdateMagicListItemCommand {
+            title: Some("Updated".to_string()),
+            content: None,
+            checked: Some(true),
+            due_date: None,
+            status: Some(MagicListItemStatus::Done),
+        };
+        repo.update_item_inner(&mut *tx, ml_id, item_id.0, update_command).await.unwrap();
+
+        let row: (String, String, bool, String) = sqlx::query_as(
+            "SELECT title, content, checked, status FROM magic_list_item WHERE id = $1"
+        ).bind(item_id.0).fetch_one(&mut *tx).await.unwrap();
+
+        assert_eq!(row.0, "Updated");
+        assert_eq!(row.1, "Original content"); // unchanged via COALESCE
+        assert!(row.2);
+        assert_eq!(row.3, "DONE");
     }
 }

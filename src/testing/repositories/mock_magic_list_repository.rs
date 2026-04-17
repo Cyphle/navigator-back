@@ -4,6 +4,7 @@ use crate::domains::magic_list::domain::create_magic_list_command::CreateMagicLi
 use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMagicListItemCommand;
 use crate::domains::magic_list::domain::magic_list::MagicList;
 use crate::domains::magic_list::domain::magic_list_repository::MagicListRepository;
+use crate::domains::magic_list::domain::update_magic_list_item_command::UpdateMagicListItemCommand;
 use async_trait::async_trait;
 
 pub struct MockMagicListRepository {
@@ -33,6 +34,10 @@ impl MagicListRepository for MockMagicListRepository {
     }
 
     async fn add_item(&self, _magic_list_id: i32, _command: CreateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
+        Ok(())
+    }
+
+    async fn update_item(&self, _magic_list_id: i32, _item_id: i32, _command: UpdateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
         Ok(())
     }
 }

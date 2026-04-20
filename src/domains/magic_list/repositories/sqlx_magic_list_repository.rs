@@ -5,6 +5,8 @@ use crate::domains::magic_list::domain::create_magic_list_command::CreateMagicLi
 use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMagicListItemCommand;
 use crate::domains::magic_list::domain::magic_list::MagicList;
 use crate::domains::magic_list::domain::magic_list_repository::MagicListRepository;
+use crate::domains::magic_list::domain::magic_list_summary::MagicListSummary;
+use crate::domains::magic_list::domain::magic_list_type::MagicListType;
 use crate::domains::magic_list::domain::update_magic_list_item_command::UpdateMagicListItemCommand;
 use async_trait::async_trait;
 use sqlx::{PgConnection, Pool, Postgres};
@@ -15,6 +17,16 @@ struct MagicListRow {
     owner_username: String,
     visibility: String,
     family_id: Option<i32>,
+}
+
+#[derive(sqlx::FromRow)]
+struct MagicListSummaryRow {
+    id: i32,
+    name: String,
+    visibility: String,
+    magic_list_type: String,
+    family_id: Option<i32>,
+    item_count: i64,
 }
 
 pub struct SqlxMagicListRepository {
@@ -43,6 +55,39 @@ impl SqlxMagicListRepository {
             },
             family_id: row.family_id,
         })
+    }
+
+    async fn get_summary_for_user_and_family_inner(&self, conn: &mut PgConnection, username: &str, family_id: i32) -> Result<Vec<MagicListSummary>, Box<dyn ApplicationError>> {
+        let rows: Vec<MagicListSummaryRow> = sqlx::query_as(
+            "SELECT ml.id, ml.name, ml.visibility, ml.type as magic_list_type, ml.family_id, \
+                    COUNT(mli.id) as item_count \
+             FROM magic_list ml \
+             JOIN users u ON ml.owner_id = u.id \
+             LEFT JOIN magic_list_item mli ON mli.magic_list_id = ml.id \
+             WHERE ml.family_id = $2 \
+               AND ( \
+                   (ml.visibility = 'PERSONAL' AND u.username = $1) \
+                   OR (ml.visibility = 'SHARED') \
+               ) \
+             GROUP BY ml.id, ml.name, ml.visibility, ml.type, ml.family_id",
+        )
+        .bind(username)
+        .bind(family_id)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+
+        Ok(rows.into_iter().map(|row| MagicListSummary {
+            id: row.id,
+            name: row.name,
+            visibility: match row.visibility.as_str() {
+                "SHARED" => Visibility::Shared,
+                _ => Visibility::Personal,
+            },
+            magic_list_type: MagicListType::from_str(&row.magic_list_type),
+            family_id: row.family_id,
+            item_count: row.item_count,
+        }).collect())
     }
 
     async fn is_family_member_inner(&self, conn: &mut PgConnection, username: &str, family_id: i32) -> Result<bool, Box<dyn ApplicationError>> {
@@ -139,6 +184,12 @@ impl MagicListRepository for SqlxMagicListRepository {
         self.find_by_id_inner(&mut *conn, magic_list_id).await
     }
 
+    async fn get_summary_for_user_and_family(&self, username: &str, family_id: i32) -> Result<Vec<MagicListSummary>, Box<dyn ApplicationError>> {
+        let mut conn = self.pool.acquire().await
+            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        self.get_summary_for_user_and_family_inner(&mut *conn, username, family_id).await
+    }
+
     async fn is_family_member(&self, username: &str, family_id: i32) -> Result<bool, Box<dyn ApplicationError>> {
         let mut conn = self.pool.acquire().await
             .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
@@ -195,6 +246,64 @@ mod tests {
         sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, 'CHILD', false)")
             .bind(family_id).bind(member_id).execute(&mut **tx).await.unwrap();
         family_id
+    }
+
+    async fn add_item_to_list(tx: &mut Transaction<'_, Postgres>, magic_list_id: i32, title: &str) {
+        sqlx::query("INSERT INTO magic_list_item (magic_list_id, title) VALUES ($1, $2)")
+            .bind(magic_list_id).bind(title)
+            .execute(&mut **tx).await.unwrap();
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_get_summary_returns_personal_and_shared_lists(mut conn: sqlx::PgConnection) {
+        let repo = SqlxMagicListRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
+        let mut tx = conn.begin().await.unwrap();
+        let alice_id = create_user(&mut tx, "alice").await;
+        let bob_id = create_user(&mut tx, "bob").await;
+        let family_id = create_family_with_member(&mut tx, alice_id, bob_id).await;
+
+        let shared_id = create_magic_list(&mut tx, alice_id, "SHARED", Some(family_id)).await;
+        add_item_to_list(&mut tx, shared_id, "Item 1").await;
+        add_item_to_list(&mut tx, shared_id, "Item 2").await;
+
+        let personal_id = create_magic_list(&mut tx, bob_id, "PERSONAL", Some(family_id)).await;
+        add_item_to_list(&mut tx, personal_id, "Item 3").await;
+
+        let result = repo.get_summary_for_user_and_family_inner(&mut *tx, "bob", family_id).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        let shared = result.iter().find(|s| s.id == shared_id).unwrap();
+        assert_eq!(shared.visibility, Visibility::Shared);
+        assert_eq!(shared.item_count, 2);
+        let personal = result.iter().find(|s| s.id == personal_id).unwrap();
+        assert_eq!(personal.visibility, Visibility::Personal);
+        assert_eq!(personal.item_count, 1);
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_get_summary_excludes_other_users_personal_lists(mut conn: sqlx::PgConnection) {
+        let repo = SqlxMagicListRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
+        let mut tx = conn.begin().await.unwrap();
+        let alice_id = create_user(&mut tx, "alice").await;
+        let bob_id = create_user(&mut tx, "bob").await;
+        let family_id = create_family_with_member(&mut tx, alice_id, bob_id).await;
+
+        create_magic_list(&mut tx, alice_id, "PERSONAL", Some(family_id)).await;
+
+        let result = repo.get_summary_for_user_and_family_inner(&mut *tx, "bob", family_id).await.unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_get_summary_returns_empty_for_no_lists(mut conn: sqlx::PgConnection) {
+        let repo = SqlxMagicListRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
+        let mut tx = conn.begin().await.unwrap();
+        create_user(&mut tx, "alice").await;
+
+        let result = repo.get_summary_for_user_and_family_inner(&mut *tx, "alice", 999).await.unwrap();
+
+        assert!(result.is_empty());
     }
 
     #[sqlx_testcontainers::test]

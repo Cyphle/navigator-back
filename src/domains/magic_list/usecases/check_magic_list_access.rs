@@ -93,6 +93,7 @@ mod tests {
             visibility: Visibility::Shared,
             family_id: Some(1),
             is_family_member: true,
+            ..Default::default()
         });
         let result = check_magic_list_access(&state, "bob", 1).await;
         assert!(result.is_ok());
@@ -105,6 +106,7 @@ mod tests {
             visibility: Visibility::Shared,
             family_id: Some(1),
             is_family_member: false,
+            ..Default::default()
         });
         let result = check_magic_list_access(&state, "bob", 1).await;
         assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");

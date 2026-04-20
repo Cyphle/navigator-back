@@ -53,6 +53,7 @@ mod tests {
                 visibility: Visibility::Shared,
                 family_id: Some(1),
                 is_family_member: true,
+                ..Default::default()
             },
             ..Default::default()
         });
@@ -82,6 +83,7 @@ mod tests {
                 visibility: Visibility::Shared,
                 family_id: Some(1),
                 is_family_member: false,
+                ..Default::default()
             },
             ..Default::default()
         });

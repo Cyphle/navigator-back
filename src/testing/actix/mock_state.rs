@@ -1,6 +1,7 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::visibility::Visibility;
 use crate::domains::family::domain::family::Family;
+use crate::domains::magic_list::domain::magic_list_summary::MagicListSummary;
 use crate::testing::repositories::mock_bank_account_read_repository::MockBankAccountReadRepository;
 use crate::testing::repositories::mock_family_repository::MockFamilyRepository;
 use crate::testing::repositories::mock_magic_list_repository::MockMagicListRepository;
@@ -17,6 +18,7 @@ pub struct MockMagicListConfig {
     pub visibility: Visibility,
     pub family_id: Option<i32>,
     pub is_family_member: bool,
+    pub summaries: Vec<MagicListSummary>,
 }
 
 impl Default for MockMagicListConfig {
@@ -26,6 +28,7 @@ impl Default for MockMagicListConfig {
             visibility: Visibility::Shared,
             family_id: None,
             is_family_member: true,
+            summaries: vec![],
         }
     }
 }
@@ -64,6 +67,7 @@ pub fn mock_actix_state<DB: DbConnection>(
             visibility: config.magic_list.visibility,
             family_id: config.magic_list.family_id,
             is_family_member: config.magic_list.is_family_member,
+            summaries: config.magic_list.summaries,
         }),
     })
 }

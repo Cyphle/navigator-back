@@ -1,5 +1,6 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
+use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::common::visibility::Visibility;
 use actix_web::web;
 
@@ -24,7 +25,10 @@ pub async fn check_magic_list_access<DB: DbConnection>(
         true
     } else if magic_list.visibility == Visibility::Shared {
         match magic_list.family_id {
-            Some(family_id) => state.magic_list_repository.is_family_member(username, family_id).await?,
+            Some(family_id) => state.family_repository
+                .is_family_member(username, family_id)
+                .await
+                .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?,
             None => false,
         }
     } else {
@@ -45,9 +49,10 @@ mod tests {
     use crate::testing::actix::mock_state::{mock_actix_state, MockMagicListConfig, MockStateConfig};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
 
-    fn a_state(config: MockMagicListConfig) -> web::Data<ActixState<MockPoolPostgres>> {
+    fn a_state(magic_list: MockMagicListConfig, is_family_member: bool) -> web::Data<ActixState<MockPoolPostgres>> {
         mock_actix_state(MockPoolPostgres, MockStateConfig {
-            magic_list: config,
+            magic_list,
+            is_family_member,
             ..Default::default()
         })
     }
@@ -58,7 +63,7 @@ mod tests {
             owner_username: "alice".to_string(),
             visibility: Visibility::Personal,
             ..Default::default()
-        });
+        }, false);
         let result = check_magic_list_access(&state, "alice", 1).await;
         assert!(result.is_ok());
     }
@@ -70,7 +75,7 @@ mod tests {
             visibility: Visibility::Shared,
             family_id: Some(1),
             ..Default::default()
-        });
+        }, false);
         let result = check_magic_list_access(&state, "alice", 1).await;
         assert!(result.is_ok());
     }
@@ -81,7 +86,7 @@ mod tests {
             owner_username: "alice".to_string(),
             visibility: Visibility::Personal,
             ..Default::default()
-        });
+        }, false);
         let result = check_magic_list_access(&state, "bob", 1).await;
         assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
     }
@@ -92,9 +97,8 @@ mod tests {
             owner_username: "alice".to_string(),
             visibility: Visibility::Shared,
             family_id: Some(1),
-            is_family_member: true,
             ..Default::default()
-        });
+        }, true);
         let result = check_magic_list_access(&state, "bob", 1).await;
         assert!(result.is_ok());
     }
@@ -105,9 +109,8 @@ mod tests {
             owner_username: "alice".to_string(),
             visibility: Visibility::Shared,
             family_id: Some(1),
-            is_family_member: false,
             ..Default::default()
-        });
+        }, false);
         let result = check_magic_list_access(&state, "bob", 1).await;
         assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
     }
@@ -119,7 +122,7 @@ mod tests {
             visibility: Visibility::Shared,
             family_id: None,
             ..Default::default()
-        });
+        }, false);
         let result = check_magic_list_access(&state, "bob", 1).await;
         assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
     }

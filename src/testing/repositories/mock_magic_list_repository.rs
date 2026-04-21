@@ -5,6 +5,7 @@ use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMa
 use crate::domains::magic_list::domain::magic_list::MagicList;
 use crate::domains::magic_list::domain::magic_list_repository::MagicListRepository;
 use crate::domains::magic_list::domain::magic_list_summary::MagicListSummary;
+use crate::domains::magic_list::domain::magic_list_type::MagicListType;
 use crate::domains::magic_list::domain::update_magic_list_item_command::UpdateMagicListItemCommand;
 use async_trait::async_trait;
 
@@ -12,7 +13,6 @@ pub struct MockMagicListRepository {
     pub owner_username: String,
     pub visibility: Visibility,
     pub family_id: Option<i32>,
-    pub is_family_member: bool,
     pub summaries: Vec<MagicListSummary>,
 }
 
@@ -25,6 +25,8 @@ impl MagicListRepository for MockMagicListRepository {
     async fn find_by_id(&self, magic_list_id: i32) -> Result<MagicList, Box<dyn ApplicationError>> {
         Ok(MagicList {
             id: magic_list_id,
+            name: "Mock list".to_string(),
+            list_type: MagicListType::Simple,
             owner_username: self.owner_username.clone(),
             visibility: self.visibility.clone(),
             family_id: self.family_id,
@@ -33,10 +35,6 @@ impl MagicListRepository for MockMagicListRepository {
 
     async fn get_summary_for_user_and_family(&self, _username: &str, _family_id: i32) -> Result<Vec<MagicListSummary>, Box<dyn ApplicationError>> {
         Ok(self.summaries.clone())
-    }
-
-    async fn is_family_member(&self, _username: &str, _family_id: i32) -> Result<bool, Box<dyn ApplicationError>> {
-        Ok(self.is_family_member)
     }
 
     async fn add_item(&self, _magic_list_id: i32, _command: CreateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {

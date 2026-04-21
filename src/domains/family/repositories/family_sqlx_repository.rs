@@ -9,9 +9,11 @@ use crate::domains::family::repositories::family_entity::FamilyEntity;
 use crate::config::actix::AsPgConn;
 use crate::domains::family::domain::family_repository::FamilyRepository;
 
-use sqlx::PgConnection;
+use sqlx::{PgConnection, Pool};
 
-pub struct SqlxFamilyRepository; // TODO en fait il faut mettre le pool dans la structure c'est bien comme magic list repository
+pub struct SqlxFamilyRepository {
+    pub pool: Pool<Postgres>,
+}
 
 impl SqlxFamilyRepository {
     async fn get_families_for_inner(
@@ -227,6 +229,27 @@ impl SqlxFamilyRepository {
         Ok(())
     }
 
+    async fn is_family_member_inner(
+        &self,
+        conn: &mut PgConnection,
+        username: &str,
+        family_id: i32,
+    ) -> Result<bool, Error> {
+        let result: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(\
+                SELECT 1 FROM family_members fm \
+                JOIN users u ON fm.user_id = u.id \
+                WHERE u.username = $1 AND fm.family_id = $2\
+            )",
+        )
+        .bind(username)
+        .bind(family_id)
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Ok(result.0)
+    }
+
     fn to_family(&self, families: Vec<FamilyEntity>) -> Family {
         let creator_username = families
             .iter()
@@ -261,6 +284,11 @@ impl FamilyRepository for SqlxFamilyRepository {
     async fn create_family(&self, conn: &mut dyn AsPgConn, username: &str, command: &CreateFamilyCommand) -> Result<Family, Error> {
         self.create_family_inner(conn.as_pg_conn(), username, command).await
     }
+
+    async fn is_family_member(&self, username: &str, family_id: i32) -> Result<bool, Error> {
+        let mut conn = self.pool.acquire().await?;
+        self.is_family_member_inner(&mut *conn, username, family_id).await
+    }
 }
 
 #[cfg(test)]
@@ -278,7 +306,7 @@ mod tests {
 
     #[sqlx_testcontainers::test]
     async fn test_create_family(mut conn: sqlx::PgConnection) {
-        let repo = SqlxFamilyRepository;
+        let repo = SqlxFamilyRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
         let mut tx = conn.begin().await.unwrap();
         create_user(&mut tx, "alice", "alice@example.com").await;
         let command = CreateFamilyCommand {
@@ -298,7 +326,7 @@ mod tests {
 
     #[sqlx_testcontainers::test]
     async fn test_get_families_for(mut conn: sqlx::PgConnection) {
-        let repo = SqlxFamilyRepository;
+        let repo = SqlxFamilyRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
         let mut tx = conn.begin().await.unwrap();
         let alice_id = create_user(&mut tx, "alice", "alice@example.com").await;
         let family_id: (i32,) = sqlx::query_as("INSERT INTO families (name, creator_id) VALUES ($1, $2) RETURNING id")
@@ -313,7 +341,7 @@ mod tests {
 
     #[sqlx_testcontainers::test]
     async fn test_get_family_by_name(mut conn: sqlx::PgConnection) {
-        let repo = SqlxFamilyRepository;
+        let repo = SqlxFamilyRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
         let mut tx = conn.begin().await.unwrap();
         create_user(&mut tx, "alice", "alice@example.com").await;
         let command = CreateFamilyCommand {
@@ -324,5 +352,40 @@ mod tests {
         repo.create_family_inner(&mut *tx, "alice", &command).await.unwrap();
         let family = repo.get_family_by_name_inner(&mut *tx, "alice", "alice club").await.unwrap();
         assert_eq!(family.name, "Alice Club");
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_is_family_member_returns_true(mut conn: sqlx::PgConnection) {
+        let repo = SqlxFamilyRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
+        let mut tx = conn.begin().await.unwrap();
+        let alice_id = create_user(&mut tx, "alice", "alice@example.com").await;
+        let bob_id = create_user(&mut tx, "bob", "bob@example.com").await;
+        let family_id: (i32,) = sqlx::query_as("INSERT INTO families (name, creator_id) VALUES ($1, $2) RETURNING id")
+            .bind("Test family").bind(alice_id).fetch_one(&mut *tx).await.unwrap();
+        sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, 'PARENT', true)")
+            .bind(family_id.0).bind(alice_id).execute(&mut *tx).await.unwrap();
+        sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, 'CHILD', false)")
+            .bind(family_id.0).bind(bob_id).execute(&mut *tx).await.unwrap();
+
+        let result = repo.is_family_member_inner(&mut *tx, "bob", family_id.0).await.unwrap();
+        assert!(result);
+    }
+
+    #[sqlx_testcontainers::test]
+    async fn test_is_family_member_returns_false(mut conn: sqlx::PgConnection) {
+        let repo = SqlxFamilyRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
+        let mut tx = conn.begin().await.unwrap();
+        let alice_id = create_user(&mut tx, "alice", "alice@example.com").await;
+        create_user(&mut tx, "charlie", "charlie@example.com").await;
+        let bob_id = create_user(&mut tx, "bob", "bob@example.com").await;
+        let family_id: (i32,) = sqlx::query_as("INSERT INTO families (name, creator_id) VALUES ($1, $2) RETURNING id")
+            .bind("Test family").bind(alice_id).fetch_one(&mut *tx).await.unwrap();
+        sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, 'PARENT', true)")
+            .bind(family_id.0).bind(alice_id).execute(&mut *tx).await.unwrap();
+        sqlx::query("INSERT INTO family_members (family_id, user_id, relation, is_admin) VALUES ($1, $2, 'CHILD', false)")
+            .bind(family_id.0).bind(bob_id).execute(&mut *tx).await.unwrap();
+
+        let result = repo.is_family_member_inner(&mut *tx, "charlie", family_id.0).await.unwrap();
+        assert!(!result);
     }
 }

@@ -14,6 +14,8 @@ use sqlx::{PgConnection, Pool, Postgres};
 #[derive(sqlx::FromRow)]
 struct MagicListRow {
     id: i32,
+    name: String,
+    list_type: String,
     owner_username: String,
     visibility: String,
     family_id: Option<i32>,
@@ -36,7 +38,7 @@ pub struct SqlxMagicListRepository {
 impl SqlxMagicListRepository {
     async fn find_by_id_inner(&self, conn: &mut PgConnection, magic_list_id: i32) -> Result<MagicList, Box<dyn ApplicationError>> {
         let row: MagicListRow = sqlx::query_as(
-            "SELECT ml.id, u.username as owner_username, ml.visibility, ml.family_id \
+            "SELECT ml.id, ml.name, ml.type as list_type, u.username as owner_username, ml.visibility, ml.family_id \
              FROM magic_list ml \
              JOIN users u ON ml.owner_id = u.id \
              WHERE ml.id = $1",
@@ -48,6 +50,8 @@ impl SqlxMagicListRepository {
 
         Ok(MagicList {
             id: row.id,
+            name: row.name,
+            list_type: MagicListType::from_str(&row.list_type),
             owner_username: row.owner_username,
             visibility: match row.visibility.as_str() {
                 "SHARED" => Visibility::Shared,
@@ -88,23 +92,6 @@ impl SqlxMagicListRepository {
             family_id: row.family_id,
             item_count: row.item_count,
         }).collect())
-    }
-
-    async fn is_family_member_inner(&self, conn: &mut PgConnection, username: &str, family_id: i32) -> Result<bool, Box<dyn ApplicationError>> {
-        let result: (bool,) = sqlx::query_as(
-            "SELECT EXISTS(\
-                SELECT 1 FROM family_members fm \
-                JOIN users u ON fm.user_id = u.id \
-                WHERE u.username = $1 AND fm.family_id = $2\
-            )",
-        )
-        .bind(username)
-        .bind(family_id)
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-
-        Ok(result.0)
     }
 
     async fn add_item_inner(&self, conn: &mut PgConnection, magic_list_id: i32, command: CreateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
@@ -188,12 +175,6 @@ impl MagicListRepository for SqlxMagicListRepository {
         let mut conn = self.pool.acquire().await
             .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
         self.get_summary_for_user_and_family_inner(&mut *conn, username, family_id).await
-    }
-
-    async fn is_family_member(&self, username: &str, family_id: i32) -> Result<bool, Box<dyn ApplicationError>> {
-        let mut conn = self.pool.acquire().await
-            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-        self.is_family_member_inner(&mut *conn, username, family_id).await
     }
 
     async fn add_item(&self, magic_list_id: i32, command: CreateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
@@ -317,31 +298,6 @@ mod tests {
 
         assert_eq!(result.owner_username, "alice");
         assert_eq!(result.visibility, Visibility::Shared);
-    }
-
-    #[sqlx_testcontainers::test]
-    async fn test_is_family_member_returns_true(mut conn: sqlx::PgConnection) {
-        let repo = SqlxMagicListRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
-        let mut tx = conn.begin().await.unwrap();
-        let alice_id = create_user(&mut tx, "alice").await;
-        let bob_id = create_user(&mut tx, "bob").await;
-        let family_id = create_family_with_member(&mut tx, alice_id, bob_id).await;
-
-        let result = repo.is_family_member_inner(&mut *tx, "bob", family_id).await.unwrap();
-        assert!(result);
-    }
-
-    #[sqlx_testcontainers::test]
-    async fn test_is_family_member_returns_false(mut conn: sqlx::PgConnection) {
-        let repo = SqlxMagicListRepository { pool: Pool::connect_lazy("postgres://unused").unwrap() };
-        let mut tx = conn.begin().await.unwrap();
-        let alice_id = create_user(&mut tx, "alice").await;
-        create_user(&mut tx, "charlie").await;
-        let bob_id = create_user(&mut tx, "bob").await;
-        let family_id = create_family_with_member(&mut tx, alice_id, bob_id).await;
-
-        let result = repo.is_family_member_inner(&mut *tx, "charlie", family_id).await.unwrap();
-        assert!(!result);
     }
 
     #[sqlx_testcontainers::test]

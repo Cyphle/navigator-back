@@ -7,6 +7,7 @@ use async_trait::async_trait;
 pub struct MockFamilyRepository {
     pub families: Vec<Family>,
     pub should_error: bool,
+    pub is_family_member: bool,
 }
 
 #[async_trait]
@@ -23,6 +24,11 @@ impl FamilyRepository for MockFamilyRepository {
             .find(|f| f.name == name && f.creator_username == username)
             .cloned()
             .ok_or(sqlx::Error::RowNotFound)
+    }
+
+    async fn is_family_member(&self, _username: &str, _family_id: i32) -> Result<bool, sqlx::Error> {
+        if self.should_error { return Err(sqlx::Error::RowNotFound); }
+        Ok(self.is_family_member)
     }
 
     async fn create_family(&self, _conn: &mut dyn AsPgConn, username: &str, command: &CreateFamilyCommand) -> Result<Family, sqlx::Error> {

@@ -17,7 +17,6 @@ pub struct MockMagicListConfig {
     pub owner_username: String,
     pub visibility: Visibility,
     pub family_id: Option<i32>,
-    pub is_family_member: bool,
     pub summaries: Vec<MagicListSummary>,
 }
 
@@ -27,7 +26,6 @@ impl Default for MockMagicListConfig {
             owner_username: "mock_user".to_string(),
             visibility: Visibility::Shared,
             family_id: None,
-            is_family_member: true,
             summaries: vec![],
         }
     }
@@ -38,6 +36,7 @@ pub struct MockStateConfig {
     pub families: Option<Vec<Family>>,
     pub user_should_error: bool,
     pub family_should_error: bool,
+    pub is_family_member: bool,
     pub magic_list: MockMagicListConfig,
 }
 
@@ -60,13 +59,13 @@ pub fn mock_actix_state<DB: DbConnection>(
         family_repository: Arc::new(MockFamilyRepository {
             families: config.families.unwrap_or_default(),
             should_error: config.family_should_error,
+            is_family_member: config.is_family_member,
         }),
         bank_account_repository: Arc::new(MockBankAccountReadRepository),
         magic_list_repository: Arc::new(MockMagicListRepository {
             owner_username: config.magic_list.owner_username,
             visibility: config.magic_list.visibility,
             family_id: config.magic_list.family_id,
-            is_family_member: config.magic_list.is_family_member,
             summaries: config.magic_list.summaries,
         }),
     })

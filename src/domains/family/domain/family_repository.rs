@@ -24,4 +24,10 @@ pub trait FamilyRepository: Send + Sync {
         username: &str,
         command: &CreateFamilyCommand
     ) -> Result<Family, sqlx::Error>;
+
+    async fn is_family_member(
+        &self,
+        username: &str,
+        family_id: i32,
+    ) -> Result<bool, sqlx::Error>;
 }

@@ -64,7 +64,7 @@ async fn main() -> std::io::Result<()> {
                     // Repositories
                     // TODO en fait il faut mettre le pool dans la structure c'est bien comme magic list repository
                     let user_repository = SqlxUserRepository {};
-                    let family_repository = SqlxFamilyRepository {};
+                    let family_repository = SqlxFamilyRepository { pool: connection.clone() };
                     let bank_account_repository = SqlxBankAccountRepository {};
                     let magic_list_repository = SqlxMagicListRepository { pool: connection.clone() };
 

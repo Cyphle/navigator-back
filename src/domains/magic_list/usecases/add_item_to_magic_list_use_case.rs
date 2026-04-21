@@ -52,9 +52,9 @@ mod tests {
                 owner_username: "alice".to_string(),
                 visibility: Visibility::Shared,
                 family_id: Some(1),
-                is_family_member: true,
                 ..Default::default()
             },
+            is_family_member: true,
             ..Default::default()
         });
         let result = add_item_to_magic_list_use_case(state, "bob".to_string(), 1, a_command()).await;
@@ -82,9 +82,9 @@ mod tests {
                 owner_username: "alice".to_string(),
                 visibility: Visibility::Shared,
                 family_id: Some(1),
-                is_family_member: false,
                 ..Default::default()
             },
+            is_family_member: false,
             ..Default::default()
         });
         let result = add_item_to_magic_list_use_case(state, "bob".to_string(), 1, a_command()).await;

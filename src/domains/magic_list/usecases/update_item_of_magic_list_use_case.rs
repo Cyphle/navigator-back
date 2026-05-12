@@ -1,17 +1,32 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
+use crate::domains::magic_list::domain::magic_list_item_status::MagicListItemStatus;
 use crate::domains::magic_list::domain::update_magic_list_item_command::UpdateMagicListItemCommand;
 use crate::domains::magic_list::usecases::check_magic_list_access::check_magic_list_access;
 use actix_web::web;
+use chrono::NaiveDate;
 
 pub async fn update_item_of_magic_list_use_case<DB: DbConnection>(
     state: web::Data<ActixState<DB>>,
     username: String,
     magic_list_id: i32,
     item_id: i32,
-    command: UpdateMagicListItemCommand,
+    title: Option<String>,
+    content: Option<String>,
+    checked: Option<bool>,
+    due_date: Option<NaiveDate>,
+    status: Option<MagicListItemStatus>,
 ) -> Result<(), Box<dyn ApplicationError>> {
     check_magic_list_access(&state, &username, magic_list_id).await?;
+
+    let command = UpdateMagicListItemCommand {
+        title,
+        content,
+        checked,
+        due_date,
+        status,
+    };
+
     state.magic_list_repository.update_item(magic_list_id, item_id, command).await
 }
 
@@ -22,14 +37,19 @@ mod tests {
     use crate::testing::actix::mock_state::{mock_actix_state, MockMagicListConfig, MockStateConfig};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
 
-    fn a_command() -> UpdateMagicListItemCommand {
-        UpdateMagicListItemCommand {
-            title: Some("Updated title".to_string()),
-            content: None,
-            checked: None,
-            due_date: None,
-            status: None,
-        }
+    async fn call(state: web::Data<crate::testing::actix::mock_state::MockActixState>, user: &str) -> Result<(), Box<dyn ApplicationError>> {
+        update_item_of_magic_list_use_case(
+            state,
+            user.to_string(),
+            1,
+            10,
+            Some("Updated title".to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
     }
 
     #[actix_web::test]
@@ -42,8 +62,7 @@ mod tests {
             },
             ..Default::default()
         });
-        let result = update_item_of_magic_list_use_case(state, "alice".to_string(), 1, 10, a_command()).await;
-        assert!(result.is_ok());
+        assert!(call(state, "alice").await.is_ok());
     }
 
     #[actix_web::test]
@@ -58,8 +77,7 @@ mod tests {
             is_family_member: true,
             ..Default::default()
         });
-        let result = update_item_of_magic_list_use_case(state, "bob".to_string(), 1, 10, a_command()).await;
-        assert!(result.is_ok());
+        assert!(call(state, "bob").await.is_ok());
     }
 
     #[actix_web::test]
@@ -72,8 +90,10 @@ mod tests {
             },
             ..Default::default()
         });
-        let result = update_item_of_magic_list_use_case(state, "bob".to_string(), 1, 10, a_command()).await;
-        assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
+        assert_eq!(
+            call(state, "bob").await.unwrap_err().get_message(),
+            "Access denied to this magic list"
+        );
     }
 
     #[actix_web::test]
@@ -88,7 +108,9 @@ mod tests {
             is_family_member: false,
             ..Default::default()
         });
-        let result = update_item_of_magic_list_use_case(state, "bob".to_string(), 1, 10, a_command()).await;
-        assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
+        assert_eq!(
+            call(state, "bob").await.unwrap_err().get_message(),
+            "Access denied to this magic list"
+        );
     }
 }

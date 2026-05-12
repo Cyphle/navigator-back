@@ -24,8 +24,8 @@ impl FamilyRelation {
         }
     }
     
-    pub fn from_str(relation: &String) -> FamilyRelation {
-        match relation.as_str() {
+    pub fn from_str(relation: &str) -> FamilyRelation {
+        match relation {
             "PARENT" => FamilyRelation::Parent,
             "GRAND_PARENT" => FamilyRelation::GrandParent,
             "CHILD" => FamilyRelation::Child,

@@ -2,10 +2,7 @@ use crate::config::actix::{ActixState, AsPgConn, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
-use crate::domains::common::visibility::Visibility;
-use crate::domains::magic_list::domain::create_magic_list_command::CreateMagicListCommand;
 use crate::domains::magic_list::domain::magic_list_summary::MagicListSummary;
-use crate::domains::magic_list::domain::magic_list_type::MagicListType;
 use crate::domains::magic_list::http::magic_list_requests::CreateMagicListRequest;
 use crate::domains::magic_list::http::magic_list_views::MagicListSummaryView;
 use crate::security::token::get_connected_username;
@@ -51,7 +48,15 @@ pub async fn create_magic_list_middleware<DB, CreateMagicList, Fut>(
 ) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection + Clone + AsPgConn,
-    CreateMagicList: Fn(web::Data<ActixState<DB>>, String, CreateMagicListCommand) -> Fut,
+    CreateMagicList: Fn(
+        web::Data<ActixState<DB>>,
+        String,
+        String,
+        String,
+        String,
+        Option<i32>,
+        Option<Vec<i32>>,
+    ) -> Fut,
     Fut: Future<Output = Result<(), Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Creating magic list");
@@ -60,18 +65,17 @@ where
         .await
         .ok_or(MissingUsernameError)?;
 
-    let command = CreateMagicListCommand {
-        name: request.name,
-        visibility: match request.visibility.to_uppercase().as_str() {
-            "PERSONAL" => Visibility::Personal,
-            _ => Visibility::Shared,
-        },
-        magic_list_type: MagicListType::from_str(&request.magic_list_type),
-        family_id: Some(family_id),
-        excluded_member_ids: request.excluded_member_ids,
-    };
+    create_magic_list(
+        state,
+        username,
+        request.name,
+        request.visibility,
+        request.magic_list_type,
+        Some(family_id),
+        request.excluded_member_ids,
+    )
+    .await?;
 
-    create_magic_list(state, username, command).await?;
     Ok(HttpResponse::Created().finish())
 }
 
@@ -181,9 +185,17 @@ mod tests {
                             state,
                             family_id.into_inner(),
                             request.into_inner(),
-                            move |state, username, command| {
+                            move |state, username, name, visibility, magic_list_type, family_id, excluded_member_ids| {
                                 (spy_handler)();
-                                create_magic_list_use_case(state, username, command)
+                                create_magic_list_use_case(
+                                    state,
+                                    username,
+                                    name,
+                                    visibility,
+                                    magic_list_type,
+                                    family_id,
+                                    excluded_member_ids,
+                                )
                             },
                         )
                         .await

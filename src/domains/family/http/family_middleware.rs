@@ -2,16 +2,15 @@ use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
-use crate::domains::family::domain::create_family_command::{CreateFamilyCommand, CreateFamilyMemberCommand};
 use crate::domains::family::domain::family::Family;
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
+use crate::domains::family::usecases::create_family_use_case::CreateFamilyMemberInput;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
 use actix_web::{web, HttpResponse};
 use log::debug;
 use serde::Serialize;
 use std::future::Future;
-use crate::domains::family::domain::family_relation::FamilyRelation;
 
 #[derive(Serialize)]
 struct FamilyView {
@@ -50,7 +49,13 @@ pub async fn create_family_middleware<DB, CreateFamily, Fut>(
 ) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection,
-    CreateFamily: Fn(web::Data<ActixState<DB>>, String, CreateFamilyCommand) -> Fut,
+    CreateFamily: Fn(
+        web::Data<ActixState<DB>>,
+        String,
+        String,
+        String,
+        Vec<CreateFamilyMemberInput>,
+    ) -> Fut,
     Fut: Future<Output = Result<Family, Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Creating family middleware");
@@ -59,17 +64,17 @@ where
         .await
         .ok_or(MissingUsernameError)?;
 
-    let command = CreateFamilyCommand {
-        name: request.name,
-        creator_relation: FamilyRelation::from_str(&request.creator_relation),
-        members: request.members.into_iter().map(|m| CreateFamilyMemberCommand {
+    let members = request
+        .members
+        .into_iter()
+        .map(|m| CreateFamilyMemberInput {
             username_or_email: m.username_or_email,
-            relation: FamilyRelation::from_str(&m.relation),
+            relation: m.relation,
             is_admin: m.is_admin,
-        }).collect(),
-    };
+        })
+        .collect();
 
-    create_family(state, username, command).await?;
+    create_family(state, username, request.name, request.creator_relation, members).await?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -171,9 +176,15 @@ mod tests {
                                 session,
                                 state,
                                 request.into_inner(),
-                                move |state, username, command| {
+                                move |state, username, name, creator_relation, members| {
                                     (spy_handler)();
-                                    create_family_use_case(state, username, command)
+                                    create_family_use_case(
+                                        state,
+                                        username,
+                                        name,
+                                        creator_relation,
+                                        members,
+                                    )
                                 },
                             )
                             .await

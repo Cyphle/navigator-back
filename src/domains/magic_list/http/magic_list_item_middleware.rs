@@ -2,9 +2,7 @@ use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
-use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMagicListItemCommand;
 use crate::domains::magic_list::domain::magic_list_item_status::MagicListItemStatus;
-use crate::domains::magic_list::domain::update_magic_list_item_command::UpdateMagicListItemCommand;
 use crate::domains::magic_list::http::magic_list_requests::{CreateMagicListItemRequest, UpdateMagicListItemRequest};
 use crate::security::token::get_connected_username;
 use actix_session::Session;
@@ -28,7 +26,16 @@ pub async fn add_item_to_magic_list_middleware<DB, CreateItem, Fut>(
 ) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection + Clone,
-    CreateItem: Fn(web::Data<ActixState<DB>>, String, i32, CreateMagicListItemCommand) -> Fut,
+    CreateItem: Fn(
+        web::Data<ActixState<DB>>,
+        String,
+        i32,
+        String,
+        Option<String>,
+        Option<bool>,
+        Option<NaiveDate>,
+        Option<MagicListItemStatus>,
+    ) -> Fut,
     Fut: Future<Output = Result<(), Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Adding item to magic list {}", magic_list_id);
@@ -38,16 +45,20 @@ where
         .ok_or(MissingUsernameError)?;
 
     let due_date = parse_due_date(request.due_date.as_deref())?;
+    let status = request.status.as_deref().and_then(MagicListItemStatus::from_str);
 
-    let command = CreateMagicListItemCommand {
-        title: request.title,
-        content: request.content,
-        checked: request.checked,
+    create_item(
+        state,
+        username,
+        magic_list_id,
+        request.title,
+        request.content,
+        request.checked,
         due_date,
-        status: request.status.as_deref().and_then(MagicListItemStatus::from_str),
-    };
+        status,
+    )
+    .await?;
 
-    create_item(state, username, magic_list_id, command).await?;
     Ok(HttpResponse::Created().finish())
 }
 
@@ -61,7 +72,17 @@ pub async fn update_item_of_magic_list_middleware<DB, UpdateItem, Fut>(
 ) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection + Clone,
-    UpdateItem: Fn(web::Data<ActixState<DB>>, String, i32, i32, UpdateMagicListItemCommand) -> Fut,
+    UpdateItem: Fn(
+        web::Data<ActixState<DB>>,
+        String,
+        i32,
+        i32,
+        Option<String>,
+        Option<String>,
+        Option<bool>,
+        Option<NaiveDate>,
+        Option<MagicListItemStatus>,
+    ) -> Fut,
     Fut: Future<Output = Result<(), Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Updating item {} of magic list {}", item_id, magic_list_id);
@@ -71,16 +92,21 @@ where
         .ok_or(MissingUsernameError)?;
 
     let due_date = parse_due_date(request.due_date.as_deref())?;
+    let status = request.status.as_deref().and_then(MagicListItemStatus::from_str);
 
-    let command = UpdateMagicListItemCommand {
-        title: request.title,
-        content: request.content,
-        checked: request.checked,
+    update_item(
+        state,
+        username,
+        magic_list_id,
+        item_id,
+        request.title,
+        request.content,
+        request.checked,
         due_date,
-        status: request.status.as_deref().and_then(MagicListItemStatus::from_str),
-    };
+        status,
+    )
+    .await?;
 
-    update_item(state, username, magic_list_id, item_id, command).await?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -121,9 +147,18 @@ mod tests {
                             state,
                             magic_list_id,
                             request.into_inner(),
-                            move |state, username, magic_list_id, command| {
+                            move |state, username, magic_list_id, title, content, checked, due_date, status| {
                                 (spy_handler)();
-                                add_item_to_magic_list_use_case(state, username, magic_list_id, command)
+                                add_item_to_magic_list_use_case(
+                                    state,
+                                    username,
+                                    magic_list_id,
+                                    title,
+                                    content,
+                                    checked,
+                                    due_date,
+                                    status,
+                                )
                             },
                         )
                         .await
@@ -182,9 +217,19 @@ mod tests {
                             magic_list_id,
                             item_id,
                             request.into_inner(),
-                            move |state, username, magic_list_id, item_id, command| {
+                            move |state, username, magic_list_id, item_id, title, content, checked, due_date, status| {
                                 (spy_handler)();
-                                update_item_of_magic_list_use_case(state, username, magic_list_id, item_id, command)
+                                update_item_of_magic_list_use_case(
+                                    state,
+                                    username,
+                                    magic_list_id,
+                                    item_id,
+                                    title,
+                                    content,
+                                    checked,
+                                    due_date,
+                                    status,
+                                )
                             },
                         )
                         .await

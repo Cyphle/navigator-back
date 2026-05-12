@@ -1,22 +1,44 @@
 use crate::config::actix::{ActixState, AsPgConn, DbConnection, DbTransaction};
 use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
-use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
+use crate::domains::family::domain::create_family_command::{CreateFamilyCommand, CreateFamilyMemberCommand};
 use crate::domains::family::domain::family::Family;
 use crate::domains::family::domain::family_errors::FamilyAlreadyExistsError;
+use crate::domains::family::domain::family_relation::FamilyRelation;
 use actix_web::web;
 use log::{error, info};
 use sqlx::Error;
 
+pub struct CreateFamilyMemberInput {
+    pub username_or_email: String,
+    pub relation: String,
+    pub is_admin: bool,
+}
+
 pub async fn create_family_use_case<DB: DbConnection>(
     state: web::Data<ActixState<DB>>,
     username: String,
-    command: CreateFamilyCommand,
+    name: String,
+    creator_relation: String,
+    members: Vec<CreateFamilyMemberInput>,
 ) -> Result<Family, Box<dyn ApplicationError>>
 where
     for<'a> <DB as DbConnection>::Tx<'a>: AsPgConn,
 {
-    info!("Creating family {} for user '{}'", &command.name, &username);
+    info!("Creating family {} for user '{}'", &name, &username);
+
+    let command = CreateFamilyCommand {
+        name,
+        creator_relation: FamilyRelation::from_str(&creator_relation),
+        members: members
+            .into_iter()
+            .map(|m| CreateFamilyMemberCommand {
+                username_or_email: m.username_or_email,
+                relation: FamilyRelation::from_str(&m.relation),
+                is_admin: m.is_admin,
+            })
+            .collect(),
+    };
 
     let mut tx = state
         .db_connection
@@ -25,7 +47,7 @@ where
         .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
 
     match state.family_repository
-        .get_family_by_name(&mut tx, username.as_str(), command.name.as_str())
+        .get_family_by_name(&mut tx, &username, &command.name)
         .await
     {
         Ok(_) => {
@@ -69,9 +91,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::config::actix::ActixState;
-    use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
     use crate::domains::family::domain::family::Family;
-    use crate::domains::family::domain::family_relation::FamilyRelation;
     use crate::domains::family::usecases::create_family_use_case::create_family_use_case;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
@@ -129,11 +149,9 @@ mod tests {
         let result = create_family_use_case(
             state,
             "john".to_string(),
-            CreateFamilyCommand {
-                name: "Family C".to_string(),
-                creator_relation: FamilyRelation::Parent,
-                members: vec![],
-            },
+            "Family C".to_string(),
+            "PARENT".to_string(),
+            vec![],
         )
             .await;
 
@@ -147,11 +165,9 @@ mod tests {
         let result = create_family_use_case(
             state,
             "johndoe".to_string(),
-            CreateFamilyCommand {
-                name: "Family A".to_string(),
-                creator_relation: FamilyRelation::Parent,
-                members: vec![],
-            },
+            "Family A".to_string(),
+            "PARENT".to_string(),
+            vec![],
         )
             .await;
 
@@ -165,11 +181,9 @@ mod tests {
         let result = create_family_use_case(
             state,
             "john".to_string(),
-            CreateFamilyCommand {
-                name: "Family C".to_string(),
-                creator_relation: FamilyRelation::Parent,
-                members: vec![],
-            },
+            "Family C".to_string(),
+            "PARENT".to_string(),
+            vec![],
         )
             .await;
 
@@ -183,11 +197,9 @@ mod tests {
         let result = create_family_use_case(
             state,
             "john".to_string(),
-            CreateFamilyCommand {
-                name: "Family C".to_string(),
-                creator_relation: FamilyRelation::Parent,
-                members: vec![],
-            },
+            "Family C".to_string(),
+            "PARENT".to_string(),
+            vec![],
         ).await;
 
         let err = result.expect_err("should return error");

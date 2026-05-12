@@ -1,39 +1,35 @@
 use crate::config::actix::{ActixState, AsPgConn, DbConnection};
+use crate::domains::common::errors::middleware_error::MiddlewareError;
+use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::user::http::user_views::UserView;
 use crate::domains::user::usecases::get_user_info_use_case::get_user_info_use_case;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
-use actix_web::{web, HttpResponse, Responder};
-use log::{debug, error};
+use actix_web::{web, HttpResponse};
+use log::debug;
 
 pub async fn users_info_middleware<DB: DbConnection>(
     session: Session,
     state: web::Data<ActixState<DB>>,
-) -> impl Responder
+) -> Result<HttpResponse, MiddlewareError>
 where
     for<'a> <DB as DbConnection>::Tx<'a>: AsPgConn,
 {
     debug!("[Middleware] users me");
 
-    let username = get_connected_username(&session, &state).await;
-
-    if username.is_none() {
-        return HttpResponse::Unauthorized().finish();
-    }
-
-    get_user_info_use_case(state, username)
+    let username = get_connected_username(&session, &state)
         .await
-        .map(|user| HttpResponse::Ok().json(UserView {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            first_name: user.first_name,
-            last_name: user.last_name,
-        }))
-        .unwrap_or_else(|e| {
-            error!("Error getting user info: {:?}", e.get_message());
-            HttpResponse::InternalServerError().json(e.get_message())
-        })
+        .ok_or(MissingUsernameError)?;
+
+    let user = get_user_info_use_case(state, Some(username)).await?;
+
+    Ok(HttpResponse::Ok().json(UserView {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+    }))
 }
 
 #[cfg(test)]

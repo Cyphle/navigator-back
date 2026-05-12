@@ -1,5 +1,6 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
+use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMagicListItemCommand;
 use crate::domains::magic_list::domain::magic_list_item_status::MagicListItemStatus;
@@ -7,10 +8,16 @@ use crate::domains::magic_list::domain::update_magic_list_item_command::UpdateMa
 use crate::domains::magic_list::http::magic_list_requests::{CreateMagicListItemRequest, UpdateMagicListItemRequest};
 use crate::security::token::get_connected_username;
 use actix_session::Session;
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse};
 use chrono::NaiveDate;
-use log::{debug, error};
+use log::debug;
 use std::future::Future;
+
+fn parse_due_date(raw: Option<&str>) -> Result<Option<NaiveDate>, MiddlewareError> {
+    raw.map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d"))
+        .transpose()
+        .map_err(|_| MiddlewareError::InvalidDateFormat)
+}
 
 pub async fn add_item_to_magic_list_middleware<DB, CreateItem, Fut>(
     session: Session,
@@ -18,7 +25,7 @@ pub async fn add_item_to_magic_list_middleware<DB, CreateItem, Fut>(
     magic_list_id: i32,
     request: CreateMagicListItemRequest,
     create_item: CreateItem,
-) -> impl Responder
+) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection + Clone,
     CreateItem: Fn(web::Data<ActixState<DB>>, String, i32, CreateMagicListItemCommand) -> Fut,
@@ -26,22 +33,11 @@ where
 {
     debug!("[Middleware] Adding item to magic list {}", magic_list_id);
 
-    let username = match get_connected_username(&session, &state).await.ok_or(MissingUsernameError) {
-        Ok(u) => u,
-        Err(e) => {
-            error!("Error adding item to magic list: {:?}", e.get_message());
-            return HttpResponse::InternalServerError().json(e.get_message());
-        }
-    };
+    let username = get_connected_username(&session, &state)
+        .await
+        .ok_or(MissingUsernameError)?;
 
-    let due_date = match request.due_date.as_deref().map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d")) {
-        Some(Err(e)) => {
-            error!("Invalid due_date format: {}", e);
-            return HttpResponse::BadRequest().json("Invalid due_date format, expected YYYY-MM-DD");
-        }
-        Some(Ok(d)) => Some(d),
-        None => None,
-    };
+    let due_date = parse_due_date(request.due_date.as_deref())?;
 
     let command = CreateMagicListItemCommand {
         title: request.title,
@@ -51,19 +47,8 @@ where
         status: request.status.as_deref().and_then(MagicListItemStatus::from_str),
     };
 
-    create_item(state, username, magic_list_id, command)
-        .await
-        .map(|_| HttpResponse::Created().finish())
-        .unwrap_or_else(|e| {
-            let message = e.get_message();
-            match e.status_code() {
-                403 => HttpResponse::Forbidden().json(message),
-                _ => {
-                    error!("Error adding item to magic list: {:?}", message);
-                    HttpResponse::InternalServerError().json(message)
-                }
-            }
-        })
+    create_item(state, username, magic_list_id, command).await?;
+    Ok(HttpResponse::Created().finish())
 }
 
 pub async fn update_item_of_magic_list_middleware<DB, UpdateItem, Fut>(
@@ -73,7 +58,7 @@ pub async fn update_item_of_magic_list_middleware<DB, UpdateItem, Fut>(
     item_id: i32,
     request: UpdateMagicListItemRequest,
     update_item: UpdateItem,
-) -> impl Responder
+) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection + Clone,
     UpdateItem: Fn(web::Data<ActixState<DB>>, String, i32, i32, UpdateMagicListItemCommand) -> Fut,
@@ -81,22 +66,11 @@ where
 {
     debug!("[Middleware] Updating item {} of magic list {}", item_id, magic_list_id);
 
-    let username = match get_connected_username(&session, &state).await.ok_or(MissingUsernameError) {
-        Ok(u) => u,
-        Err(e) => {
-            error!("Error updating item of magic list: {:?}", e.get_message());
-            return HttpResponse::InternalServerError().json(e.get_message());
-        }
-    };
+    let username = get_connected_username(&session, &state)
+        .await
+        .ok_or(MissingUsernameError)?;
 
-    let due_date = match request.due_date.as_deref().map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d")) {
-        Some(Err(e)) => {
-            error!("Invalid due_date format: {}", e);
-            return HttpResponse::BadRequest().json("Invalid due_date format, expected YYYY-MM-DD");
-        }
-        Some(Ok(d)) => Some(d),
-        None => None,
-    };
+    let due_date = parse_due_date(request.due_date.as_deref())?;
 
     let command = UpdateMagicListItemCommand {
         title: request.title,
@@ -106,19 +80,8 @@ where
         status: request.status.as_deref().and_then(MagicListItemStatus::from_str),
     };
 
-    update_item(state, username, magic_list_id, item_id, command)
-        .await
-        .map(|_| HttpResponse::Ok().finish())
-        .unwrap_or_else(|e| {
-            let message = e.get_message();
-            match e.status_code() {
-                403 => HttpResponse::Forbidden().json(message),
-                _ => {
-                    error!("Error updating item of magic list: {:?}", message);
-                    HttpResponse::InternalServerError().json(message)
-                }
-            }
-        })
+    update_item(state, username, magic_list_id, item_id, command).await?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[cfg(test)]

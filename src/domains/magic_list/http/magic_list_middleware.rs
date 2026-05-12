@@ -1,5 +1,6 @@
-use crate::config::actix::{ActixState, DbConnection, AsPgConn};
+use crate::config::actix::{ActixState, AsPgConn, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
+use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::common::visibility::Visibility;
 use crate::domains::magic_list::domain::create_magic_list_command::CreateMagicListCommand;
@@ -9,8 +10,8 @@ use crate::domains::magic_list::http::magic_list_requests::CreateMagicListReques
 use crate::domains::magic_list::http::magic_list_views::MagicListSummaryView;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
-use actix_web::{web, HttpResponse, Responder};
-use log::{debug, error};
+use actix_web::{HttpResponse, web};
+use log::debug;
 use std::future::Future;
 
 pub async fn get_magic_list_summary_middleware<DB, GetSummary, Fut>(
@@ -18,32 +19,27 @@ pub async fn get_magic_list_summary_middleware<DB, GetSummary, Fut>(
     state: web::Data<ActixState<DB>>,
     family_id: i32,
     get_summary: GetSummary,
-) -> impl Responder
+) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection + Clone,
     GetSummary: Fn(web::Data<ActixState<DB>>, String, i32) -> Fut,
     Fut: Future<Output = Result<Vec<MagicListSummary>, Box<dyn ApplicationError>>>,
 {
-    debug!("[Middleware] Getting magic list summary for family {}", family_id);
+    debug!(
+        "[Middleware] Getting magic list summary for family {}",
+        family_id
+    );
 
-    let username = match get_connected_username(&session, &state).await.ok_or(MissingUsernameError) {
-        Ok(u) => u,
-        Err(e) => {
-            error!("Error getting magic list summary: {:?}", e.get_message());
-            return HttpResponse::InternalServerError().json(e.get_message());
-        }
-    };
-
-    get_summary(state, username, family_id)
+    let username = get_connected_username(&session, &state)
         .await
-        .map(|summaries| {
-            let views: Vec<MagicListSummaryView> = summaries.into_iter().map(MagicListSummaryView::from).collect();
-            HttpResponse::Ok().json(views)
-        })
-        .unwrap_or_else(|e| {
-            error!("Error getting magic list summary: {:?}", e.get_message());
-            HttpResponse::InternalServerError().json(e.get_message())
-        })
+        .ok_or(MissingUsernameError)?;
+
+    let summaries = get_summary(state, username, family_id).await?;
+    let views: Vec<MagicListSummaryView> = summaries
+        .into_iter()
+        .map(MagicListSummaryView::from)
+        .collect();
+    Ok(HttpResponse::Ok().json(views))
 }
 
 pub async fn create_magic_list_middleware<DB, CreateMagicList, Fut>(
@@ -52,25 +48,17 @@ pub async fn create_magic_list_middleware<DB, CreateMagicList, Fut>(
     family_id: i32,
     request: CreateMagicListRequest,
     create_magic_list: CreateMagicList,
-) -> impl Responder
+) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection + Clone + AsPgConn,
     CreateMagicList: Fn(web::Data<ActixState<DB>>, String, CreateMagicListCommand) -> Fut,
     Fut: Future<Output = Result<(), Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Creating magic list");
-    
+
     let username = get_connected_username(&session, &state)
         .await
-        .ok_or(MissingUsernameError);
-
-    let username = match username {
-        Ok(u) => u,
-        Err(e) => {
-            error!("Error creating magic list: {:?}", e.get_message());
-            return HttpResponse::InternalServerError().json(e.get_message());
-        }
-    };
+        .ok_or(MissingUsernameError)?;
 
     let command = CreateMagicListCommand {
         name: request.name,
@@ -83,50 +71,48 @@ where
         excluded_member_ids: request.excluded_member_ids,
     };
 
-    create_magic_list(state, username, command)
-        .await
-        .map(|_| HttpResponse::Created().finish())
-        .unwrap_or_else(|e| {
-            error!("Error creating magic list: {:?}", e.get_message());
-            HttpResponse::InternalServerError().json(e.get_message())
-        })
+    create_magic_list(state, username, command).await?;
+    Ok(HttpResponse::Created().finish())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::domains::magic_list::http::magic_list_requests::CreateMagicListRequest;
-    use crate::domains::magic_list::usecases::create_magic_list_use_case::create_magic_list_use_case;
-    use crate::domains::magic_list::usecases::get_magic_list_summary_use_case::get_magic_list_summary_use_case;
-    use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockMagicListConfig, MockStateConfig};
-    use crate::testing::repositories::mock_database::MockPoolPostgres;
     use crate::domains::common::visibility::Visibility;
     use crate::domains::magic_list::domain::magic_list_summary::MagicListSummary;
     use crate::domains::magic_list::domain::magic_list_type::MagicListType;
+    use crate::domains::magic_list::http::magic_list_requests::CreateMagicListRequest;
+    use crate::domains::magic_list::usecases::create_magic_list_use_case::create_magic_list_use_case;
+    use crate::domains::magic_list::usecases::get_magic_list_summary_use_case::get_magic_list_summary_use_case;
+    use crate::testing::actix::mock_state::{
+        MockActixState, MockMagicListConfig, MockStateConfig, mock_actix_state,
+    };
+    use crate::testing::repositories::mock_database::MockPoolPostgres;
     use actix_web::http::StatusCode;
-    use actix_web::{test, web, App};
-    use spy::{spy, Spy};
+    use actix_web::{App, test, web};
+    use spy::{Spy, spy};
     use std::sync::Arc;
 
     #[actix_web::test]
     async fn should_call_get_magic_list_summary_application_layer() {
         // Given
-        let summaries = vec![
-            MagicListSummary {
-                id: 1,
-                name: "Courses".to_string(),
-                visibility: Visibility::Shared,
-                magic_list_type: MagicListType::Simple,
-                family_id: Some(1),
-                item_count: 3,
-            },
-        ];
-        let state = mock_actix_state(MockPoolPostgres, MockStateConfig {
-            magic_list: MockMagicListConfig {
-                summaries,
+        let summaries = vec![MagicListSummary {
+            id: 1,
+            name: "Courses".to_string(),
+            visibility: Visibility::Shared,
+            magic_list_type: MagicListType::Simple,
+            family_id: Some(1),
+            item_count: 3,
+        }];
+        let state = mock_actix_state(
+            MockPoolPostgres,
+            MockStateConfig {
+                magic_list: MockMagicListConfig {
+                    summaries,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
-        });
+        );
         let (spy_handler, spy) = spy!();
         let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
         let app = test::init_service(App::new().app_data(state.clone()).route(
@@ -179,33 +165,31 @@ mod tests {
         let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
         let app = test::init_service(App::new().app_data(state.clone()).route(
             "/families/{family_id}/magic-lists",
-            web::post().to(
-                {
+            web::post().to({
+                let spy_handler = Arc::clone(&spy_handler);
+                move |session: actix_session::Session,
+                      state: web::Data<MockActixState>,
+                      family_id: web::Path<i32>,
+                      request: web::Json<CreateMagicListRequest>| {
                     let spy_handler = Arc::clone(&spy_handler);
-                    move |session: actix_session::Session,
-                          state: web::Data<MockActixState>,
-                          family_id: web::Path<i32>,
-                          request: web::Json<CreateMagicListRequest>| {
-                        let spy_handler = Arc::clone(&spy_handler);
-                        async move {
-                            session
-                                .insert("test_username", "mock_user")
-                                .expect("failed to set test username in session");
-                            super::create_magic_list_middleware(
-                                session,
-                                state,
-                                family_id.into_inner(),
-                                request.into_inner(),
-                                move |state, username, command| {
-                                    (spy_handler)();
-                                    create_magic_list_use_case(state, username, command)
-                                },
-                            )
-                            .await
-                        }
+                    async move {
+                        session
+                            .insert("test_username", "mock_user")
+                            .expect("failed to set test username in session");
+                        super::create_magic_list_middleware(
+                            session,
+                            state,
+                            family_id.into_inner(),
+                            request.into_inner(),
+                            move |state, username, command| {
+                                (spy_handler)();
+                                create_magic_list_use_case(state, username, command)
+                            },
+                        )
+                        .await
                     }
-                },
-            ),
+                }
+            }),
         ))
         .await;
 

@@ -1,13 +1,14 @@
 use crate::config::actix::{ActixState, DbConnection};
 use crate::domains::common::errors::errors::ApplicationError;
+use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::family::domain::create_family_command::{CreateFamilyCommand, CreateFamilyMemberCommand};
 use crate::domains::family::domain::family::Family;
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
 use crate::security::token::get_connected_username;
 use actix_session::Session;
-use actix_web::{web, HttpResponse, Responder};
-use log::{debug, error};
+use actix_web::{web, HttpResponse};
+use log::debug;
 use serde::Serialize;
 use std::future::Future;
 use crate::domains::family::domain::family_relation::FamilyRelation;
@@ -21,7 +22,7 @@ pub async fn get_families_middleware<DB, GetFamilies, Fut>(
     session: Session,
     state: web::Data<ActixState<DB>>,
     get_families: GetFamilies,
-) -> impl Responder
+) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection,
     GetFamilies: Fn(web::Data<ActixState<DB>>, String) -> Fut,
@@ -31,29 +32,14 @@ where
 
     let username = get_connected_username(&session, &state)
         .await
-        .ok_or(MissingUsernameError);
+        .ok_or(MissingUsernameError)?;
 
-    let username = match username {
-        Ok(u) => u,
-        Err(e) => {
-            error!("Error getting families: {:?}", e.get_message());
-            return HttpResponse::InternalServerError().json(e.get_message());
-        }
-    };
-
-    get_families(state, username)
-        .await
-        .map(|families| {
-            let views = families
-                .into_iter()
-                .map(|family| FamilyView { name: family.name })
-                .collect::<Vec<_>>();
-            HttpResponse::Ok().json(views)
-        })
-        .unwrap_or_else(|e| {
-            error!("Error getting families: {:?}", e.get_message());
-            HttpResponse::InternalServerError().json(e.get_message())
-        })
+    let families = get_families(state, username).await?;
+    let views = families
+        .into_iter()
+        .map(|family| FamilyView { name: family.name })
+        .collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(views))
 }
 
 pub async fn create_family_middleware<DB, CreateFamily, Fut>(
@@ -61,24 +47,17 @@ pub async fn create_family_middleware<DB, CreateFamily, Fut>(
     state: web::Data<ActixState<DB>>,
     request: CreateFamilyRequest,
     create_family: CreateFamily,
-) -> impl Responder
+) -> Result<HttpResponse, MiddlewareError>
 where
     DB: DbConnection,
     CreateFamily: Fn(web::Data<ActixState<DB>>, String, CreateFamilyCommand) -> Fut,
     Fut: Future<Output = Result<Family, Box<dyn ApplicationError>>>,
 {
     debug!("[Middleware] Creating family middleware");
+
     let username = get_connected_username(&session, &state)
         .await
-        .ok_or(MissingUsernameError);
-
-    let username = match username {
-        Ok(u) => u,
-        Err(e) => {
-            error!("Error creating family: {:?}", e.get_message());
-            return HttpResponse::InternalServerError().json(e.get_message());
-        }
-    };
+        .ok_or(MissingUsernameError)?;
 
     let command = CreateFamilyCommand {
         name: request.name,
@@ -90,13 +69,8 @@ where
         }).collect(),
     };
 
-    create_family(state, username, command)
-        .await
-        .map(|_| HttpResponse::Ok().finish())
-        .unwrap_or_else(|e| {
-            error!("Error creating family: {:?}", e.get_message());
-            HttpResponse::InternalServerError().json(e.get_message())
-        })
+    create_family(state, username, command).await?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[cfg(test)]

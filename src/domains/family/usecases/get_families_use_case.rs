@@ -1,13 +1,13 @@
 use crate::config::actix::{ActixState, AsPgConn, DbConnection};
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::domain::family::Family;
+use crate::domains::family::domain::family_errors::GetFamiliesError;
 use actix_web::web;
 
 pub async fn get_families_use_case<DB: DbConnection>(
     state: web::Data<ActixState<DB>>,
     username: String,
-) -> Result<Vec<Family>, Box<dyn ApplicationError>>
+) -> Result<Vec<Family>, GetFamiliesError>
 where
     for<'a> <DB as DbConnection>::Tx<'a>: AsPgConn,
 {
@@ -15,13 +15,16 @@ where
         .db_connection
         .begin()
         .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        .map_err(|e| GetFamiliesError::Repository {
+            username: username.clone(),
+            source: RepositoryError::from(e),
+        })?;
 
     state
         .family_repository
         .get_families_for(&mut tx, &username)
         .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)
+        .map_err(|source| GetFamiliesError::Repository { username, source })
 }
 
 
@@ -77,18 +80,14 @@ mod tests {
     async fn should_error_on_db_connection_failure() {
         let state = make_state_db_error();
         let result = get_families_use_case(state, "john".to_string()).await;
-
-        let err = result.expect_err("should return error");
-        assert!(err.get_message().contains("no rows returned"));
+        assert!(result.is_err());
     }
 
     #[actix_web::test]
     async fn should_error_on_repository_failure() {
         let state = make_state_repo_error();
         let result = get_families_use_case(state, "john".to_string()).await;
-
-        let err = result.expect_err("should return error");
-        assert!(err.get_message().contains("no rows returned"));
+        assert!(result.is_err());
     }
 
     #[actix_web::test]

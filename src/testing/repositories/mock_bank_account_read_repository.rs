@@ -3,6 +3,7 @@ use crate::domains::bank_account::domain::bank_account::BankAccount;
 use crate::domains::bank_account::domain::bank_account_command::{AddChargeToAccountCommand, AddCreditToAccountCommand, AddExpenseToAccountCommand, AddExpenseToBudgetCommand, CreateBankAccountCommand};
 use crate::domains::bank_account::domain::bank_account_filters::BankAccountFilter;
 use crate::domains::bank_account::domain::bank_account_repository::BankAccountRepository;
+use crate::domains::common::errors::repository_error::RepositoryError;
 use async_trait::async_trait;
 use crate::domains::bank_account::domain::budget::Budget;
 
@@ -15,7 +16,7 @@ impl BankAccountRepository for MockBankAccountReadRepository {
         _conn: &mut dyn AsPgConn,
         _username: &str,
         _filter: &BankAccountFilter,
-    ) -> Result<Vec<BankAccount>, sqlx::Error> {
+    ) -> Result<Vec<BankAccount>, RepositoryError> {
         Ok(vec![])
     }
 
@@ -24,7 +25,7 @@ impl BankAccountRepository for MockBankAccountReadRepository {
         _conn: &mut dyn AsPgConn,
         _username: &str,
         _command: CreateBankAccountCommand,
-    ) -> Result<BankAccount, sqlx::Error> {
+    ) -> Result<BankAccount, RepositoryError> {
         unimplemented!()
     }
 
@@ -34,7 +35,7 @@ impl BankAccountRepository for MockBankAccountReadRepository {
         _username: &str,
         _bank_account_id: i32,
         _budget: Budget,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), RepositoryError> {
         Ok(())
     }
 
@@ -44,7 +45,7 @@ impl BankAccountRepository for MockBankAccountReadRepository {
         _username: &str,
         _bank_account_id: i32,
         _command: AddExpenseToAccountCommand,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), RepositoryError> {
         Ok(())
     }
 
@@ -54,7 +55,7 @@ impl BankAccountRepository for MockBankAccountReadRepository {
         _username: &str,
         _bank_account_id: i32,
         _command: AddChargeToAccountCommand,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), RepositoryError> {
         Ok(())
     }
 
@@ -64,7 +65,7 @@ impl BankAccountRepository for MockBankAccountReadRepository {
         _username: &str,
         _bank_account_id: i32,
         _command: AddCreditToAccountCommand,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), RepositoryError> {
         Ok(())
     }
 
@@ -75,7 +76,7 @@ impl BankAccountRepository for MockBankAccountReadRepository {
         _bank_account_id: i32,
         _budget_id: i32,
         _command: AddExpenseToBudgetCommand,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), RepositoryError> {
         Ok(())
     }
 }

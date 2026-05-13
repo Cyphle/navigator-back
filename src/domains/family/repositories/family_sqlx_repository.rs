@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use sqlx::{Error, Postgres};
 use log::error;
+use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::domain::create_family_command::CreateFamilyCommand;
 use crate::domains::family::domain::family::{Family, FamilyMember};
 use crate::domains::family::domain::family_relation::FamilyRelation;
@@ -275,19 +276,19 @@ impl SqlxFamilyRepository {
 
 #[async_trait]
 impl FamilyRepository for SqlxFamilyRepository {
-    async fn get_families_for(&self, conn: &mut dyn AsPgConn, username: &str) -> Result<Vec<Family>, Error> {
-        self.get_families_for_inner(conn.as_pg_conn(), username).await
+    async fn get_families_for(&self, conn: &mut dyn AsPgConn, username: &str) -> Result<Vec<Family>, RepositoryError> {
+        Ok(self.get_families_for_inner(conn.as_pg_conn(), username).await?)
     }
-    async fn get_family_by_name(&self, conn: &mut dyn AsPgConn, username: &str, name: &str) -> Result<Family, Error> {
-        self.get_family_by_name_inner(conn.as_pg_conn(), username, name).await
+    async fn get_family_by_name(&self, conn: &mut dyn AsPgConn, username: &str, name: &str) -> Result<Family, RepositoryError> {
+        Ok(self.get_family_by_name_inner(conn.as_pg_conn(), username, name).await?)
     }
-    async fn create_family(&self, conn: &mut dyn AsPgConn, username: &str, command: &CreateFamilyCommand) -> Result<Family, Error> {
-        self.create_family_inner(conn.as_pg_conn(), username, command).await
+    async fn create_family(&self, conn: &mut dyn AsPgConn, username: &str, command: &CreateFamilyCommand) -> Result<Family, RepositoryError> {
+        Ok(self.create_family_inner(conn.as_pg_conn(), username, command).await?)
     }
 
-    async fn is_family_member(&self, username: &str, family_id: i32) -> Result<bool, Error> {
+    async fn is_family_member(&self, username: &str, family_id: i32) -> Result<bool, RepositoryError> {
         let mut conn = self.pool.acquire().await?;
-        self.is_family_member_inner(&mut *conn, username, family_id).await
+        Ok(self.is_family_member_inner(&mut *conn, username, family_id).await?)
     }
 }
 

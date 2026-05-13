@@ -3,6 +3,7 @@ use crate::domains::bank_account::domain::bank_account::{BankAccount};
 use crate::domains::bank_account::domain::bank_account_command::{AddChargeToAccountCommand, AddCreditToAccountCommand, AddExpenseToAccountCommand, AddExpenseToBudgetCommand, CreateBankAccountCommand};
 use crate::domains::bank_account::domain::bank_account_filters::BankAccountFilter;
 use crate::domains::bank_account::domain::bank_account_repository::BankAccountRepository;
+use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::common::big_decimal::{BigDecimal, to_big_decimal};
 use crate::domains::common::periodicity::Periodicity;
 use crate::domains::common::visibility::Visibility;
@@ -341,8 +342,8 @@ impl BankAccountRepository for SqlxBankAccountRepository {
         conn: &mut dyn AsPgConn,
         username: &str,
         filter: &BankAccountFilter,
-    ) -> Result<Vec<BankAccount>, Error> {
-        self.get_bank_accounts_for_inner(conn.as_pg_conn(), username, filter).await
+    ) -> Result<Vec<BankAccount>, RepositoryError> {
+        Ok(self.get_bank_accounts_for_inner(conn.as_pg_conn(), username, filter).await?)
     }
 
     async fn create_bank_account(
@@ -350,8 +351,8 @@ impl BankAccountRepository for SqlxBankAccountRepository {
         conn: &mut dyn AsPgConn,
         username: &str,
         command: CreateBankAccountCommand,
-    ) -> Result<BankAccount, Error> {
-        self.create_bank_account_inner(conn.as_pg_conn(), username, command).await
+    ) -> Result<BankAccount, RepositoryError> {
+        Ok(self.create_bank_account_inner(conn.as_pg_conn(), username, command).await?)
     }
 
     async fn add_budget_to_account(
@@ -360,8 +361,8 @@ impl BankAccountRepository for SqlxBankAccountRepository {
         username: &str,
         bank_account_id: i32,
         budget: Budget,
-    ) -> Result<(), Error> {
-        self.add_budget_to_account_inner(conn.as_pg_conn(), username, bank_account_id, budget).await
+    ) -> Result<(), RepositoryError> {
+        Ok(self.add_budget_to_account_inner(conn.as_pg_conn(), username, bank_account_id, budget).await?)
     }
 
     async fn add_expense_to_account(
@@ -370,8 +371,8 @@ impl BankAccountRepository for SqlxBankAccountRepository {
         username: &str,
         bank_account_id: i32,
         command: AddExpenseToAccountCommand,
-    ) -> Result<(), Error> {
-        self.add_expense_to_account_inner(conn.as_pg_conn(), username, bank_account_id, command).await
+    ) -> Result<(), RepositoryError> {
+        Ok(self.add_expense_to_account_inner(conn.as_pg_conn(), username, bank_account_id, command).await?)
     }
 
     async fn add_charge_to_account(
@@ -380,8 +381,8 @@ impl BankAccountRepository for SqlxBankAccountRepository {
         username: &str,
         bank_account_id: i32,
         command: AddChargeToAccountCommand,
-    ) -> Result<(), Error> {
-        self.add_charge_to_account_inner(conn.as_pg_conn(), username, bank_account_id, command).await
+    ) -> Result<(), RepositoryError> {
+        Ok(self.add_charge_to_account_inner(conn.as_pg_conn(), username, bank_account_id, command).await?)
     }
 
     async fn add_credit_to_account(
@@ -390,8 +391,8 @@ impl BankAccountRepository for SqlxBankAccountRepository {
         username: &str,
         bank_account_id: i32,
         command: AddCreditToAccountCommand,
-    ) -> Result<(), Error> {
-        self.add_credit_to_account_inner(conn.as_pg_conn(), username, bank_account_id, command).await
+    ) -> Result<(), RepositoryError> {
+        Ok(self.add_credit_to_account_inner(conn.as_pg_conn(), username, bank_account_id, command).await?)
     }
 
     async fn add_budget_expense_to_account(
@@ -401,8 +402,8 @@ impl BankAccountRepository for SqlxBankAccountRepository {
         bank_account_id: i32,
         budget_id: i32,
         command: AddExpenseToBudgetCommand,
-    ) -> Result<(), Error> {
-        self.add_budget_expense_to_account_inner(conn.as_pg_conn(), username, bank_account_id, budget_id, command).await
+    ) -> Result<(), RepositoryError> {
+        Ok(self.add_budget_expense_to_account_inner(conn.as_pg_conn(), username, bank_account_id, budget_id, command).await?)
     }
 }
 

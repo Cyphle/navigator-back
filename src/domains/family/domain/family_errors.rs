@@ -1,10 +1,24 @@
-#[derive(Debug)]
-pub struct FamilyAlreadyExistsError {
-    pub name: String
+use crate::domains::common::errors::repository_error::RepositoryError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum CreateFamilyError {
+    #[error("family already exists: {name}")]
+    AlreadyExists { name: String },
+
+    #[error("repository failure while creating family (name={name})")]
+    Repository {
+        name: String,
+        #[source]
+        source: RepositoryError,
+    },
 }
 
-impl crate::domains::common::errors::errors::ApplicationError for FamilyAlreadyExistsError {
-    fn get_message(&self) -> String {
-        format!("Family already exists: {}", self.name)
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum GetFamiliesError {
+    #[error("repository failure while fetching families (username={username})")]
+    Repository {
+        username: String,
+        #[source]
+        source: RepositoryError,
+    },
 }

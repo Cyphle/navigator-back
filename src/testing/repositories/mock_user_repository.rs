@@ -1,4 +1,5 @@
 use crate::config::actix::AsPgConn;
+use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
 use crate::domains::user::domain::user_repository::UserRepository;
@@ -40,17 +41,16 @@ impl MockUserRepository {
 
 #[async_trait]
 impl UserRepository for MockUserRepository {
-    async fn create_user(&self, _conn: &mut dyn AsPgConn, _user: &CreateUserCommand) -> Result<User, sqlx::Error> {
-        if self.should_error { return Err(sqlx::Error::RowNotFound); }
+    async fn create_user(&self, _conn: &mut dyn AsPgConn, _user: &CreateUserCommand) -> Result<User, RepositoryError> {
+        if self.should_error { return Err(RepositoryError::NotFound); }
         Ok(self.fixed_user())
     }
-    async fn get_user(&self, _conn: &mut dyn AsPgConn, _username: &str) -> Result<User, sqlx::Error> {
-        if self.should_error { return Err(sqlx::Error::RowNotFound); }
+    async fn get_user(&self, _conn: &mut dyn AsPgConn, _username: &str) -> Result<User, RepositoryError> {
+        if self.should_error { return Err(RepositoryError::NotFound); }
         Ok(self.fixed_user())
     }
-    async fn get_or_create_user(&self, _conn: &mut dyn AsPgConn, _user: &User) -> Result<User, sqlx::Error> {
-        if self.should_error { return Err(sqlx::Error::RowNotFound); }
+    async fn get_or_create_user(&self, _conn: &mut dyn AsPgConn, _user: &User) -> Result<User, RepositoryError> {
+        if self.should_error { return Err(RepositoryError::NotFound); }
         Ok(self.fixed_user())
     }
 }
-

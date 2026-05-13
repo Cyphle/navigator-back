@@ -1,6 +1,6 @@
 use crate::config::actix::{ActixState, DbConnection};
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMagicListItemCommand;
+use crate::domains::magic_list::domain::errors::AddItemToMagicListError;
 use crate::domains::magic_list::domain::magic_list_item_status::MagicListItemStatus;
 use crate::domains::magic_list::usecases::check_magic_list_access::check_magic_list_access;
 use actix_web::web;
@@ -15,8 +15,10 @@ pub async fn add_item_to_magic_list_use_case<DB: DbConnection>(
     checked: Option<bool>,
     due_date: Option<NaiveDate>,
     status: Option<MagicListItemStatus>,
-) -> Result<(), Box<dyn ApplicationError>> {
-    check_magic_list_access(&state, &username, magic_list_id).await?;
+) -> Result<(), AddItemToMagicListError> {
+    check_magic_list_access(&state, &username, magic_list_id)
+        .await
+        .map_err(|source| AddItemToMagicListError::Access { magic_list_id, source })?;
 
     let command = CreateMagicListItemCommand {
         title,
@@ -26,17 +28,22 @@ pub async fn add_item_to_magic_list_use_case<DB: DbConnection>(
         status,
     };
 
-    state.magic_list_repository.add_item(magic_list_id, command).await
+    state
+        .magic_list_repository
+        .add_item(magic_list_id, command)
+        .await
+        .map_err(|source| AddItemToMagicListError::Repository { magic_list_id, source })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domains::common::visibility::Visibility;
+    use crate::domains::magic_list::domain::errors::CheckMagicListAccessError;
     use crate::testing::actix::mock_state::{mock_actix_state, MockMagicListConfig, MockStateConfig};
     use crate::testing::repositories::mock_database::MockPoolPostgres;
 
-    async fn call(state: web::Data<crate::testing::actix::mock_state::MockActixState>, user: &str) -> Result<(), Box<dyn ApplicationError>> {
+    async fn call(state: web::Data<crate::testing::actix::mock_state::MockActixState>, user: &str) -> Result<(), AddItemToMagicListError> {
         add_item_to_magic_list_use_case(
             state,
             user.to_string(),
@@ -88,10 +95,14 @@ mod tests {
             },
             ..Default::default()
         });
-        assert_eq!(
-            call(state, "bob").await.unwrap_err().get_message(),
-            "Access denied to this magic list"
-        );
+        let err = call(state, "bob").await.unwrap_err();
+        assert!(matches!(
+            err,
+            AddItemToMagicListError::Access {
+                source: CheckMagicListAccessError::AccessDenied { .. },
+                ..
+            }
+        ));
     }
 
     #[actix_web::test]
@@ -106,9 +117,13 @@ mod tests {
             is_family_member: false,
             ..Default::default()
         });
-        assert_eq!(
-            call(state, "bob").await.unwrap_err().get_message(),
-            "Access denied to this magic list"
-        );
+        let err = call(state, "bob").await.unwrap_err();
+        assert!(matches!(
+            err,
+            AddItemToMagicListError::Access {
+                source: CheckMagicListAccessError::AccessDenied { .. },
+                ..
+            }
+        ));
     }
 }

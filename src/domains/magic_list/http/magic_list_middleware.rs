@@ -1,7 +1,7 @@
 use crate::config::actix::{ActixState, AsPgConn, DbConnection};
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
+use crate::domains::magic_list::domain::errors::{CreateMagicListError, GetMagicListSummaryError};
 use crate::domains::magic_list::domain::magic_list_summary::MagicListSummary;
 use crate::domains::magic_list::http::magic_list_requests::CreateMagicListRequest;
 use crate::domains::magic_list::http::magic_list_views::MagicListSummaryView;
@@ -20,7 +20,7 @@ pub async fn get_magic_list_summary_middleware<DB, GetSummary, Fut>(
 where
     DB: DbConnection + Clone,
     GetSummary: Fn(web::Data<ActixState<DB>>, String, i32) -> Fut,
-    Fut: Future<Output = Result<Vec<MagicListSummary>, Box<dyn ApplicationError>>>,
+    Fut: Future<Output = Result<Vec<MagicListSummary>, GetMagicListSummaryError>>,
 {
     debug!(
         "[Middleware] Getting magic list summary for family {}",
@@ -57,7 +57,7 @@ where
         Option<i32>,
         Option<Vec<i32>>,
     ) -> Fut,
-    Fut: Future<Output = Result<(), Box<dyn ApplicationError>>>,
+    Fut: Future<Output = Result<(), CreateMagicListError>>,
 {
     debug!("[Middleware] Creating magic list");
 
@@ -98,7 +98,6 @@ mod tests {
 
     #[actix_web::test]
     async fn should_call_get_magic_list_summary_application_layer() {
-        // Given
         let summaries = vec![MagicListSummary {
             id: 1,
             name: "Courses".to_string(),
@@ -147,13 +146,11 @@ mod tests {
         ))
         .await;
 
-        // When
         let req = test::TestRequest::get()
             .uri("/families/1/magic-lists/summary")
             .to_request();
         let resp = test::call_service(&app, req).await;
 
-        // Then
         assert_eq!(resp.status(), StatusCode::OK);
         drop(app);
         drop(spy_handler);
@@ -163,7 +160,6 @@ mod tests {
 
     #[actix_web::test]
     async fn should_call_create_magic_list_application_layer() {
-        // Given
         let state = mock_actix_state(MockPoolPostgres, MockStateConfig::default());
         let (spy_handler, spy) = spy!();
         let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
@@ -213,14 +209,12 @@ mod tests {
             excluded_member_ids: None,
         };
 
-        // When
         let req = test::TestRequest::post()
             .uri("/families/1/magic-lists")
             .set_json(&request)
             .to_request();
         let resp = test::call_service(&app, req).await;
 
-        // Then
         assert_eq!(resp.status(), StatusCode::CREATED);
         drop(app);
         drop(spy_handler);

@@ -1,4 +1,3 @@
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::common::visibility::Visibility;
 use crate::domains::magic_list::domain::create_magic_list_command::CreateMagicListCommand;
@@ -36,7 +35,7 @@ pub struct SqlxMagicListRepository {
 }
 
 impl SqlxMagicListRepository {
-    async fn find_by_id_inner(&self, conn: &mut PgConnection, magic_list_id: i32) -> Result<MagicList, Box<dyn ApplicationError>> {
+    async fn find_by_id_inner(&self, conn: &mut PgConnection, magic_list_id: i32) -> Result<MagicList, RepositoryError> {
         let row: MagicListRow = sqlx::query_as(
             "SELECT ml.id, ml.name, ml.type as list_type, u.username as owner_username, ml.visibility, ml.family_id \
              FROM magic_list ml \
@@ -45,8 +44,7 @@ impl SqlxMagicListRepository {
         )
         .bind(magic_list_id)
         .fetch_one(&mut *conn)
-        .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        .await?;
 
         Ok(MagicList {
             id: row.id,
@@ -61,7 +59,7 @@ impl SqlxMagicListRepository {
         })
     }
 
-    async fn get_summary_for_user_and_family_inner(&self, conn: &mut PgConnection, username: &str, family_id: i32) -> Result<Vec<MagicListSummary>, Box<dyn ApplicationError>> {
+    async fn get_summary_for_user_and_family_inner(&self, conn: &mut PgConnection, username: &str, family_id: i32) -> Result<Vec<MagicListSummary>, RepositoryError> {
         let rows: Vec<MagicListSummaryRow> = sqlx::query_as(
             "SELECT ml.id, ml.name, ml.visibility, ml.type as magic_list_type, ml.family_id, \
                     COUNT(mli.id) as item_count \
@@ -78,8 +76,7 @@ impl SqlxMagicListRepository {
         .bind(username)
         .bind(family_id)
         .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        .await?;
 
         Ok(rows.into_iter().map(|row| MagicListSummary {
             id: row.id,
@@ -94,7 +91,7 @@ impl SqlxMagicListRepository {
         }).collect())
     }
 
-    async fn add_item_inner(&self, conn: &mut PgConnection, magic_list_id: i32, command: CreateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
+    async fn add_item_inner(&self, conn: &mut PgConnection, magic_list_id: i32, command: CreateMagicListItemCommand) -> Result<(), RepositoryError> {
         sqlx::query(
             "INSERT INTO magic_list_item (magic_list_id, title, content, checked, due_date, status) \
              VALUES ($1, $2, $3, $4, $5, $6)"
@@ -106,13 +103,12 @@ impl SqlxMagicListRepository {
         .bind(command.due_date)
         .bind(command.status.as_ref().map(|s| s.to_string()))
         .execute(&mut *conn)
-        .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        .await?;
 
         Ok(())
     }
 
-    async fn update_item_inner(&self, conn: &mut PgConnection, magic_list_id: i32, item_id: i32, command: UpdateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
+    async fn update_item_inner(&self, conn: &mut PgConnection, magic_list_id: i32, item_id: i32, command: UpdateMagicListItemCommand) -> Result<(), RepositoryError> {
         sqlx::query(
             "UPDATE magic_list_item \
              SET title = COALESCE($1, title), \
@@ -131,8 +127,7 @@ impl SqlxMagicListRepository {
         .bind(item_id)
         .bind(magic_list_id)
         .execute(&mut *conn)
-        .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        .await?;
 
         Ok(())
     }
@@ -140,14 +135,13 @@ impl SqlxMagicListRepository {
 
 #[async_trait]
 impl MagicListRepository for SqlxMagicListRepository {
-    async fn create(&self, username: &String, command: CreateMagicListCommand) -> Result<(), Box<dyn ApplicationError>> {
+    async fn create(&self, username: &str, command: CreateMagicListCommand) -> Result<(), RepositoryError> {
         let owner_id: (i32,) = sqlx::query_as(
             "SELECT id FROM users WHERE username = $1",
         )
             .bind(username)
             .fetch_one(&self.pool)
-            .await
-            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+            .await?;
 
         sqlx::query(
             "INSERT INTO magic_list (name, type, visibility, owner_id, family_id, excluded_user_ids) VALUES ($1, $2, $3, $4, $5, $6)"
@@ -159,33 +153,28 @@ impl MagicListRepository for SqlxMagicListRepository {
         .bind(command.family_id)
         .bind(command.excluded_member_ids)
         .execute(&self.pool)
-        .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        .await?;
 
         Ok(())
     }
 
-    async fn find_by_id(&self, magic_list_id: i32) -> Result<MagicList, Box<dyn ApplicationError>> {
-        let mut conn = self.pool.acquire().await
-            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+    async fn find_by_id(&self, magic_list_id: i32) -> Result<MagicList, RepositoryError> {
+        let mut conn = self.pool.acquire().await?;
         self.find_by_id_inner(&mut *conn, magic_list_id).await
     }
 
-    async fn get_summary_for_user_and_family(&self, username: &str, family_id: i32) -> Result<Vec<MagicListSummary>, Box<dyn ApplicationError>> {
-        let mut conn = self.pool.acquire().await
-            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+    async fn get_summary_for_user_and_family(&self, username: &str, family_id: i32) -> Result<Vec<MagicListSummary>, RepositoryError> {
+        let mut conn = self.pool.acquire().await?;
         self.get_summary_for_user_and_family_inner(&mut *conn, username, family_id).await
     }
 
-    async fn add_item(&self, magic_list_id: i32, command: CreateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
-        let mut conn = self.pool.acquire().await
-            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+    async fn add_item(&self, magic_list_id: i32, command: CreateMagicListItemCommand) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.acquire().await?;
         self.add_item_inner(&mut *conn, magic_list_id, command).await
     }
 
-    async fn update_item(&self, magic_list_id: i32, item_id: i32, command: UpdateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
-        let mut conn = self.pool.acquire().await
-            .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+    async fn update_item(&self, magic_list_id: i32, item_id: i32, command: UpdateMagicListItemCommand) -> Result<(), RepositoryError> {
+        let mut conn = self.pool.acquire().await?;
         self.update_item_inner(&mut *conn, magic_list_id, item_id, command).await
     }
 }
@@ -355,7 +344,7 @@ mod tests {
         ).bind(item_id.0).fetch_one(&mut *tx).await.unwrap();
 
         assert_eq!(row.0, "Updated");
-        assert_eq!(row.1, "Original content"); // unchanged via COALESCE
+        assert_eq!(row.1, "Original content");
         assert!(row.2);
         assert_eq!(row.3, "DONE");
     }

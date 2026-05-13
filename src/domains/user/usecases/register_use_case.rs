@@ -1,4 +1,5 @@
 use crate::config::actix::ActixState;
+use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::security::controllers::auth_request::AuthRequest;
 use crate::security::token::get_admin_access_token;
 use actix_session::Session;
@@ -47,7 +48,7 @@ pub async fn register(
     };
 
     // TODO il faut vérifier que le user n'existe pas déjà ici et renvoyer une erreur s'il existe (le username et le mail)
-    let result: Result<User, sqlx::Error> = state
+    let result: Result<User, RepositoryError> = state
         .user_repository
         .create_user(&mut tx, &command)
         .await;

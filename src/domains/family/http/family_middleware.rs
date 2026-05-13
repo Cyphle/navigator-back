@@ -1,8 +1,8 @@
 use crate::config::actix::{ActixState, DbConnection};
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
 use crate::domains::family::domain::family::Family;
+use crate::domains::family::domain::family_errors::{CreateFamilyError, GetFamiliesError};
 use crate::domains::family::http::family_requests::CreateFamilyRequest;
 use crate::domains::family::usecases::create_family_use_case::CreateFamilyMemberInput;
 use crate::security::token::get_connected_username;
@@ -25,7 +25,7 @@ pub async fn get_families_middleware<DB, GetFamilies, Fut>(
 where
     DB: DbConnection,
     GetFamilies: Fn(web::Data<ActixState<DB>>, String) -> Fut,
-    Fut: Future<Output = Result<Vec<Family>, Box<dyn ApplicationError>>>,
+    Fut: Future<Output = Result<Vec<Family>, GetFamiliesError>>,
 {
     debug!("[Middleware] Getting families");
 
@@ -56,7 +56,7 @@ where
         String,
         Vec<CreateFamilyMemberInput>,
     ) -> Fut,
-    Fut: Future<Output = Result<Family, Box<dyn ApplicationError>>>,
+    Fut: Future<Output = Result<Family, CreateFamilyError>>,
 {
     debug!("[Middleware] Creating family middleware");
 

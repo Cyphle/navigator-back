@@ -21,7 +21,7 @@ where
         .await
         .ok_or(MissingUsernameError)?;
 
-    let user = get_user_info_use_case(state, Some(username)).await?;
+    let user = get_user_info_use_case(state, username).await?;
 
     Ok(HttpResponse::Ok().json(UserView {
         id: user.id,

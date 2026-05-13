@@ -1,3 +1,4 @@
+use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::user::domain::create_user_command::CreateUserCommand;
 use crate::domains::user::domain::user::User;
 use crate::config::actix::AsPgConn;
@@ -88,14 +89,14 @@ impl SqlxUserRepository {
 
 #[async_trait]
 impl UserRepository for SqlxUserRepository {
-    async fn create_user(&self, conn: &mut dyn AsPgConn, user: &CreateUserCommand) -> Result<User, sqlx::Error> {
-        self.create_user_inner(conn.as_pg_conn(), user).await
+    async fn create_user(&self, conn: &mut dyn AsPgConn, user: &CreateUserCommand) -> Result<User, RepositoryError> {
+        Ok(self.create_user_inner(conn.as_pg_conn(), user).await?)
     }
-    async fn get_user(&self, conn: &mut dyn AsPgConn, username: &str) -> Result<User, sqlx::Error> {
-        self.get_user_inner(conn.as_pg_conn(), username).await
+    async fn get_user(&self, conn: &mut dyn AsPgConn, username: &str) -> Result<User, RepositoryError> {
+        Ok(self.get_user_inner(conn.as_pg_conn(), username).await?)
     }
-    async fn get_or_create_user(&self, conn: &mut dyn AsPgConn, user: &User) -> Result<User, sqlx::Error> {
-        self.get_or_create_user_inner(conn.as_pg_conn(), user).await
+    async fn get_or_create_user(&self, conn: &mut dyn AsPgConn, user: &User) -> Result<User, RepositoryError> {
+        Ok(self.get_or_create_user_inner(conn.as_pg_conn(), user).await?)
     }
 }
 

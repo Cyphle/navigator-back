@@ -1,13 +1,11 @@
 use crate::config::actix::{ActixState, AsPgConn, DbConnection, DbTransaction};
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::family::domain::create_family_command::{CreateFamilyCommand, CreateFamilyMemberCommand};
 use crate::domains::family::domain::family::Family;
-use crate::domains::family::domain::family_errors::FamilyAlreadyExistsError;
+use crate::domains::family::domain::family_errors::CreateFamilyError;
 use crate::domains::family::domain::family_relation::FamilyRelation;
 use actix_web::web;
-use log::{error, info};
-use sqlx::Error;
+use log::info;
 
 pub struct CreateFamilyMemberInput {
     pub username_or_email: String,
@@ -21,14 +19,14 @@ pub async fn create_family_use_case<DB: DbConnection>(
     name: String,
     creator_relation: String,
     members: Vec<CreateFamilyMemberInput>,
-) -> Result<Family, Box<dyn ApplicationError>>
+) -> Result<Family, CreateFamilyError>
 where
     for<'a> <DB as DbConnection>::Tx<'a>: AsPgConn,
 {
     info!("Creating family {} for user '{}'", &name, &username);
 
     let command = CreateFamilyCommand {
-        name,
+        name: name.clone(),
         creator_relation: FamilyRelation::from_str(&creator_relation),
         members: members
             .into_iter()
@@ -44,55 +42,50 @@ where
         .db_connection
         .begin()
         .await
-        .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
+        .map_err(|e| CreateFamilyError::Repository {
+            name: name.clone(),
+            source: RepositoryError::from(e),
+        })?;
 
-    match state.family_repository
+    let result = match state
+        .family_repository
         .get_family_by_name(&mut tx, &username, &command.name)
         .await
     {
-        Ok(_) => {
-            error!("Family {} already exists for : {}", &command.name, &username);
-            tx.rollback()
-                .await
-                .map_err(|e: sqlx::Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-            Err(Box::new(FamilyAlreadyExistsError { name: command.name.clone() }))
-        }
-        Err(sqlx::Error::RowNotFound) => {
-            let result = state
-                .family_repository
-                .create_family(&mut tx, &username, &command)
-                .await;
+        Ok(_) => Err(CreateFamilyError::AlreadyExists { name: command.name.clone() }),
+        Err(RepositoryError::NotFound) => state
+            .family_repository
+            .create_family(&mut tx, &username, &command)
+            .await
+            .map_err(|source| CreateFamilyError::Repository {
+                name: command.name.clone(),
+                source,
+            }),
+        Err(source) => Err(CreateFamilyError::Repository {
+            name: command.name.clone(),
+            source,
+        }),
+    };
 
-            match result {
-                Ok(family) => {
-                    tx.commit()
-                        .await
-                        .map_err(|e: Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-
-                    Ok(family)
-                }
-                Err(error) => {
-                    tx.rollback()
-                        .await
-                        .map_err(|e: sqlx::Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-                    Err(Box::new(RepositoryError { error: error.to_string() }))
-                }
-            }
-        }
-        Err(err) => {
-            tx.rollback()
-                .await
-                .map_err(|e: sqlx::Error| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?;
-            Err(Box::new(RepositoryError { error: err.to_string() }))
-        }
+    match &result {
+        Ok(_) => tx.commit().await.map_err(|e| CreateFamilyError::Repository {
+            name: name.clone(),
+            source: RepositoryError::from(e),
+        })?,
+        Err(_) => tx.rollback().await.map_err(|e| CreateFamilyError::Repository {
+            name: name.clone(),
+            source: RepositoryError::from(e),
+        })?,
     }
+
+    result
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::config::actix::ActixState;
     use crate::domains::family::domain::family::Family;
-    use crate::domains::family::usecases::create_family_use_case::create_family_use_case;
     use crate::testing::actix::mock_state::{mock_actix_state, MockActixState, MockStateConfig};
     use crate::testing::repositories::mock_database::{MockPoolPostgres, MockPoolPostgresError};
     use actix_web::web;
@@ -162,17 +155,17 @@ mod tests {
     #[actix_web::test]
     async fn should_error_when_family_already_exists() {
         let state = make_state_ok();
-        let result = create_family_use_case(
+        let err = create_family_use_case(
             state,
             "johndoe".to_string(),
             "Family A".to_string(),
             "PARENT".to_string(),
             vec![],
         )
-            .await;
+            .await
+            .unwrap_err();
 
-        let err = result.expect_err("should return error");
-        assert_eq!(err.get_message(), "Family already exists: Family A");
+        assert!(matches!(err, CreateFamilyError::AlreadyExists { ref name } if name == "Family A"));
     }
 
     #[actix_web::test]
@@ -187,8 +180,7 @@ mod tests {
         )
             .await;
 
-        let err = result.expect_err("should return error");
-        assert!(err.get_message().contains("no rows returned"));
+        assert!(matches!(result, Err(CreateFamilyError::Repository { .. })));
     }
 
     #[actix_web::test]
@@ -202,7 +194,6 @@ mod tests {
             vec![],
         ).await;
 
-        let err = result.expect_err("should return error");
-        assert!(err.get_message().contains("no rows returned"));
+        assert!(matches!(result, Err(CreateFamilyError::Repository { .. })));
     }
 }

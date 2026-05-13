@@ -1,4 +1,4 @@
-use crate::domains::common::errors::errors::ApplicationError;
+use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::common::visibility::Visibility;
 use crate::domains::magic_list::domain::create_magic_list_command::CreateMagicListCommand;
 use crate::domains::magic_list::domain::create_magic_list_item_command::CreateMagicListItemCommand;
@@ -18,11 +18,11 @@ pub struct MockMagicListRepository {
 
 #[async_trait]
 impl MagicListRepository for MockMagicListRepository {
-    async fn create(&self, _username: &String, _command: CreateMagicListCommand) -> Result<(), Box<dyn ApplicationError>> {
+    async fn create(&self, _username: &str, _command: CreateMagicListCommand) -> Result<(), RepositoryError> {
         Ok(())
     }
 
-    async fn find_by_id(&self, magic_list_id: i32) -> Result<MagicList, Box<dyn ApplicationError>> {
+    async fn find_by_id(&self, magic_list_id: i32) -> Result<MagicList, RepositoryError> {
         Ok(MagicList {
             id: magic_list_id,
             name: "Mock list".to_string(),
@@ -33,15 +33,15 @@ impl MagicListRepository for MockMagicListRepository {
         })
     }
 
-    async fn get_summary_for_user_and_family(&self, _username: &str, _family_id: i32) -> Result<Vec<MagicListSummary>, Box<dyn ApplicationError>> {
+    async fn get_summary_for_user_and_family(&self, _username: &str, _family_id: i32) -> Result<Vec<MagicListSummary>, RepositoryError> {
         Ok(self.summaries.clone())
     }
 
-    async fn add_item(&self, _magic_list_id: i32, _command: CreateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
+    async fn add_item(&self, _magic_list_id: i32, _command: CreateMagicListItemCommand) -> Result<(), RepositoryError> {
         Ok(())
     }
 
-    async fn update_item(&self, _magic_list_id: i32, _item_id: i32, _command: UpdateMagicListItemCommand) -> Result<(), Box<dyn ApplicationError>> {
+    async fn update_item(&self, _magic_list_id: i32, _item_id: i32, _command: UpdateMagicListItemCommand) -> Result<(), RepositoryError> {
         Ok(())
     }
 }

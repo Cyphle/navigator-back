@@ -1,5 +1,5 @@
 use crate::config::actix::{ActixState, DbConnection};
-use crate::domains::common::errors::errors::ApplicationError;
+use crate::domains::magic_list::domain::errors::GetMagicListSummaryError;
 use crate::domains::magic_list::domain::magic_list_summary::MagicListSummary;
 use actix_web::web;
 
@@ -7,8 +7,16 @@ pub async fn get_magic_list_summary_use_case<DB: DbConnection>(
     state: web::Data<ActixState<DB>>,
     username: String,
     family_id: i32,
-) -> Result<Vec<MagicListSummary>, Box<dyn ApplicationError>> {
-    state.magic_list_repository.get_summary_for_user_and_family(&username, family_id).await
+) -> Result<Vec<MagicListSummary>, GetMagicListSummaryError> {
+    state
+        .magic_list_repository
+        .get_summary_for_user_and_family(&username, family_id)
+        .await
+        .map_err(|source| GetMagicListSummaryError::Repository {
+            username,
+            family_id,
+            source,
+        })
 }
 
 #[cfg(test)]

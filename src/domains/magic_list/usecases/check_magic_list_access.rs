@@ -1,34 +1,32 @@
 use crate::config::actix::{ActixState, DbConnection};
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::repository_error::RepositoryError;
 use crate::domains::common::visibility::Visibility;
+use crate::domains::magic_list::domain::errors::CheckMagicListAccessError;
 use actix_web::web;
-
-#[derive(Debug)]
-pub struct MagicListAccessDeniedError;
-
-impl ApplicationError for MagicListAccessDeniedError {
-    fn get_message(&self) -> String {
-        "Access denied to this magic list".to_string()
-    }
-    fn status_code(&self) -> u16 { 403 }
-}
 
 pub async fn check_magic_list_access<DB: DbConnection>(
     state: &web::Data<ActixState<DB>>,
     username: &str,
     magic_list_id: i32,
-) -> Result<(), Box<dyn ApplicationError>> {
-    let magic_list = state.magic_list_repository.find_by_id(magic_list_id).await?;
+) -> Result<(), CheckMagicListAccessError> {
+    let magic_list = state
+        .magic_list_repository
+        .find_by_id(magic_list_id)
+        .await
+        .map_err(|e| match e {
+            RepositoryError::NotFound => CheckMagicListAccessError::NotFound { magic_list_id },
+            source => CheckMagicListAccessError::Repository { magic_list_id, source },
+        })?;
 
     let authorized = if magic_list.owner_username == username {
         true
     } else if magic_list.visibility == Visibility::Shared {
         match magic_list.family_id {
-            Some(family_id) => state.family_repository
+            Some(family_id) => state
+                .family_repository
                 .is_family_member(username, family_id)
                 .await
-                .map_err(|e| Box::new(RepositoryError { error: e.to_string() }) as Box<dyn ApplicationError>)?,
+                .map_err(|source| CheckMagicListAccessError::Repository { magic_list_id, source })?,
             None => false,
         }
     } else {
@@ -36,7 +34,7 @@ pub async fn check_magic_list_access<DB: DbConnection>(
     };
 
     if !authorized {
-        return Err(Box::new(MagicListAccessDeniedError));
+        return Err(CheckMagicListAccessError::AccessDenied { magic_list_id });
     }
 
     Ok(())
@@ -87,8 +85,8 @@ mod tests {
             visibility: Visibility::Personal,
             ..Default::default()
         }, false);
-        let result = check_magic_list_access(&state, "bob", 1).await;
-        assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
+        let err = check_magic_list_access(&state, "bob", 1).await.unwrap_err();
+        assert!(matches!(err, CheckMagicListAccessError::AccessDenied { magic_list_id: 1 }));
     }
 
     #[actix_web::test]
@@ -111,8 +109,8 @@ mod tests {
             family_id: Some(1),
             ..Default::default()
         }, false);
-        let result = check_magic_list_access(&state, "bob", 1).await;
-        assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
+        let err = check_magic_list_access(&state, "bob", 1).await.unwrap_err();
+        assert!(matches!(err, CheckMagicListAccessError::AccessDenied { magic_list_id: 1 }));
     }
 
     #[actix_web::test]
@@ -123,7 +121,7 @@ mod tests {
             family_id: None,
             ..Default::default()
         }, false);
-        let result = check_magic_list_access(&state, "bob", 1).await;
-        assert_eq!(result.unwrap_err().get_message(), "Access denied to this magic list");
+        let err = check_magic_list_access(&state, "bob", 1).await.unwrap_err();
+        assert!(matches!(err, CheckMagicListAccessError::AccessDenied { magic_list_id: 1 }));
     }
 }

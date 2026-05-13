@@ -1,7 +1,7 @@
 use crate::config::actix::{ActixState, DbConnection};
-use crate::domains::common::errors::errors::ApplicationError;
 use crate::domains::common::errors::middleware_error::MiddlewareError;
 use crate::domains::common::errors::missing_username_error::MissingUsernameError;
+use crate::domains::magic_list::domain::errors::{AddItemToMagicListError, UpdateItemOfMagicListError};
 use crate::domains::magic_list::domain::magic_list_item_status::MagicListItemStatus;
 use crate::domains::magic_list::http::magic_list_requests::{CreateMagicListItemRequest, UpdateMagicListItemRequest};
 use crate::security::token::get_connected_username;
@@ -36,7 +36,7 @@ where
         Option<NaiveDate>,
         Option<MagicListItemStatus>,
     ) -> Fut,
-    Fut: Future<Output = Result<(), Box<dyn ApplicationError>>>,
+    Fut: Future<Output = Result<(), AddItemToMagicListError>>,
 {
     debug!("[Middleware] Adding item to magic list {}", magic_list_id);
 
@@ -83,7 +83,7 @@ where
         Option<NaiveDate>,
         Option<MagicListItemStatus>,
     ) -> Fut,
-    Fut: Future<Output = Result<(), Box<dyn ApplicationError>>>,
+    Fut: Future<Output = Result<(), UpdateItemOfMagicListError>>,
 {
     debug!("[Middleware] Updating item {} of magic list {}", item_id, magic_list_id);
 
@@ -124,7 +124,6 @@ mod tests {
 
     #[actix_web::test]
     async fn should_call_add_item_to_magic_list_application_layer() {
-        // Given
         let state = mock_actix_state(MockPoolPostgres, MockStateConfig::default());
         let (spy_handler, spy) = spy!();
         let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
@@ -176,14 +175,12 @@ mod tests {
             status: None,
         };
 
-        // When
         let req = test::TestRequest::post()
             .uri("/families/1/magic-lists/1/items")
             .set_json(&request)
             .to_request();
         let resp = test::call_service(&app, req).await;
 
-        // Then
         assert_eq!(resp.status(), StatusCode::CREATED);
         drop(app);
         drop(spy_handler);
@@ -193,7 +190,6 @@ mod tests {
 
     #[actix_web::test]
     async fn should_call_update_item_of_magic_list_application_layer() {
-        // Given
         let state = mock_actix_state(MockPoolPostgres, MockStateConfig::default());
         let (spy_handler, spy) = spy!();
         let spy_handler: Arc<dyn Fn() + Send + Sync> = Arc::new(spy_handler);
@@ -247,14 +243,12 @@ mod tests {
             status: None,
         };
 
-        // When
         let req = test::TestRequest::put()
             .uri("/families/1/magic-lists/1/items/10")
             .set_json(&request)
             .to_request();
         let resp = test::call_service(&app, req).await;
 
-        // Then
         assert_eq!(resp.status(), StatusCode::OK);
         drop(app);
         drop(spy_handler);

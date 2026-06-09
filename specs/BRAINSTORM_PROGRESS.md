@@ -36,8 +36,11 @@ Légende : ⚪ à faire · 🔵 en cours · ✅ terminé
 
 **Thème actif : transverse_partage (#2) — brainstorm EN COURS.**
 - Résultats du brainstorm partage → **`functional/transverse_partage.md`** (spec dédiée, décisions T1→T9, exemple magic_list, modèle de données, archi).
-- Validé avec l'utilisateur : sections 1 (modèle conceptuel) et 2 (famille étendue + modèle de données) + décisions T1→T9.
-- **Reprendre à** : valider la **section 3 (architecture** — module `common/sharing/`, dépendance `sharing → family` à acter en ADR), puis edge cases owner-quitte / suppression-famille, mapping d'erreurs, stratégie d'impl + ADR.
+- Décision structurante : **le partage est PAR USER**. « Partager à une famille » = truc du front (expansion en N grants + regroupement d'affichage). Le back ne connaît pas les familles dans le partage ⇒ **une seule table `shares`** de grants. Modèle radicalement simplifié.
+- **Brainstorm partage bouclé** : modèle fonctionnel + modèle de données (1 table) + principe erreurs/HTTP (= principe projet, codes web standards). Décisions T1→T9 figées dans `transverse_partage.md`.
+- **Cadre méthodo (important)** : dans le brainstorm on ne discute PAS d'architecture logicielle (placement modules, couches) → ça relève des *rules* d'archi clean/hexagonale. Seule notion technique discutée : le **modèle de base de données**.
+- ✅ `magic_list.md` amendé pour cohérence avec le modèle de partage par user (struct sans visibility/family/excluded, accès délégué au transverse, D5 marqué obsolète, routes ajustées).
+- **Reprendre à** : prochain thème — #3 **calendrier** (front réel / back stub).
 - ⚠️ La section « Accès & partage » de `magic_list.md` est **supersédée** par `transverse_partage.md` → à amender quand le modèle est figé.
 
 ## Journal des décisions transverses

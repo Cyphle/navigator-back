@@ -9,23 +9,25 @@
 # Principe de base
 
 De base, **rien n'est partagé** : tout élément est **personnel** (appartient à son créateur).
-On peut ensuite **partager** un élément avec **sa famille** (par défaut la famille active).
+On peut ensuite **partager** un élément avec **d'autres utilisateurs**.
+
+**Le partage se fait par utilisateur.** Le back ne raisonne qu'en **grants individuels**
+`(ressource → utilisateur → droit)`. Il **ne connaît pas la notion de « partager à une famille »** :
+c'est une **commodité du front** (cf. plus bas).
 
 # Les 3 notions clés
 
-### 1. Visibilité
-- `PERSONAL` : l'élément n'appartient qu'à son owner. Personne d'autre ne le voit.
-- `SHARED` : l'élément est rattaché à **une famille** et devient accessible à ses membres
-  selon les droits ci-dessous.
+### 1. Visibilité (dérivée)
+- `PERSONAL` : aucun grant → seul l'owner y a accès.
+- `SHARED` : au moins un grant existe.
 
-> Techniquement, **`SHARED` ⇔ il existe une row de partage** pour l'élément (cf. modèle de
-> données). Pas de partage = personnel.
+La visibilité n'est **pas** une colonne : elle se **déduit** de l'existence de grants.
 
 ### 2. Propriété (owner)
 Chaque élément a un **owner** (son créateur). L'owner est **au-dessus des droits** :
-lui seul peut **administrer** l'élément — le **renommer**, **régler son partage**
-(famille + droits par membre) et le **supprimer**. L'administration n'est **jamais déléguée**
-(même un membre en écriture ne peut pas administrer).
+lui seul peut **administrer** l'élément — le **renommer**, **gérer ses partages** (ajouter/retirer
+des grants) et le **supprimer**. L'administration n'est **jamais déléguée** (même un utilisateur en
+écriture ne peut pas administrer).
 
 ### 3. Droits d'accès — bitmask façon Linux
 Les droits portent sur le **contenu** de l'élément (les items d'une liste, les events d'un
@@ -37,187 +39,173 @@ agenda, etc.). On reprend l'encodage des permissions Linux :
 | `w` | écriture | **2** |
 | `x` | (réservé, non utilisé) | 1 |
 
-L'écriture **implique** la lecture. En itération 1, seules **3 valeurs** sont valides :
+L'écriture **implique** la lecture. En itération 1, un grant porte une de ces **2 valeurs** :
 
 | Valeur | Sens | Notation |
 |--------|------|----------|
-| `0` | aucun accès | `---` |
 | `4` | lecture seule | `r--` |
 | `6` | lecture + écriture | `rw-` |
 
-Test des droits : `acces & 4` ⇒ peut lire · `acces & 2` ⇒ peut écrire.
+Pas de grant = **aucun accès** (équivalent `0` / `---`). Test des droits : `acces & 4` ⇒ peut lire ·
+`acces & 2` ⇒ peut écrire.
 
-# Régler le partage d'un élément
+# Partager un élément
 
-Quand un owner partage un élément `SHARED`, il définit :
-- la **famille cible** (`familyId`) ;
-- un **niveau famille par défaut** (`defaultAccess` ∈ `{0, 4, 6}`, **défaut = `6`**) appliqué à
-  **tous les membres** de la famille ;
-- des **surcharges par membre** (`memberOverrides`) : pour un `userId` donné, un droit
-  spécifique (`0` / `4` / `6`) qui **remplace** le défaut famille.
-
-Ainsi `0` en surcharge = **membre exclu** (l'ancien `excludedMemberIds` de magic_list devient
-un simple override à `0`).
+L'owner partage un élément en créant des **grants** : pour chaque `userId`, un droit (`4` ou `6`).
+- Ajouter un grant = donner l'accès à un utilisateur.
+- Modifier un grant = changer son droit (`4` ⇄ `6`).
+- Retirer un grant = couper l'accès (l'élément redevient personnel s'il n'en reste aucun).
 
 # Comment l'accès est résolu
 
 Accès effectif d'un utilisateur **U** sur une ressource **R** :
 
 1. si **U == owner(R)** → **plein accès** (`rw`) **+ administration** ;
-2. sinon, si R n'a **pas de partage** (personnel) → **aucun accès** ;
-3. sinon, si U **n'est pas membre courant** de la famille cible → **aucun accès** ;
-4. sinon → la **surcharge** de U si elle existe, **sinon** le `defaultAccess` de la famille.
+2. sinon, s'il existe un **grant** pour `(R, U)` → le droit de ce grant (`4` ou `6`) ;
+3. sinon → **aucun accès**.
 
-L'administration (rename / partage / suppression) reste **owner-only**, indépendamment du bitmask.
+Pas de vérification d'appartenance à une famille : le grant individuel **est** la source de vérité.
+L'administration (rename / partages / suppression) reste **owner-only**, indépendamment du bitmask.
 
-**Multi-familles.** Un utilisateur peut appartenir à plusieurs familles (une seule « active »).
-L'accès à un élément partagé dépend de l'**appartenance à la famille cible du partage**, **jamais**
-de la famille active (qui n'est qu'un contexte d'affichage par défaut). Un élément personnel reste
-global à son owner.
+# « Partager à la famille » = commodité du front
 
-# Famille étendue
+Côté back, **aucune notion de famille dans le partage**. Côté front :
+- « Partager à ma famille » = le front **itère les membres** de la famille et crée **un grant par
+  user** (droit choisi, ex. `6`). Exclure quelqu'un = **ne pas créer son grant**.
+- L'**affichage** peut **regrouper** les grants par famille (« partagé avec la famille Dupont »),
+  c'est purement présentation.
 
-Les grands-parents, oncles, tantes (cf. personas) **ne nécessitent aucun mécanisme à part** :
-ce sont des **membres de la famille** avec leur `FamilyRelation`
-(`GRAND_PARENT` / `UNCLE` / `AUNT` / `OTHER`). Pour « organiser les vacances avec seulement
-certains », l'owner met `defaultAccess = 0` et un `override = 6` aux membres concernés (ou
-l'inverse). Le partage hors-noyau n'est qu'un jeu de surcharges.
+**Conséquences assumées :**
+- **Snapshot, pas dynamique** : un membre qui rejoint la famille *après* le partage n'a **pas**
+  d'accès automatique. Le front peut reproposer un « re-partager à la famille ».
+- **Quitter la famille ne retire pas l'accès** : sans check d'appartenance, un grant reste valide
+  tant que l'owner ne le révoque pas. (Le front peut proposer une action de nettoyage.)
 
-> Hors-scope itération 1 : partage inter-familles, ou vers des personnes hors de toute famille.
+> Ce choix **simplifie radicalement le back** : pas de `family_id`, pas de niveau par défaut, pas
+> d'overrides, pas de dépendance `sharing → family`.
 
 # Modèle de données
 
-Un **registre central et générique** (polymorphe), dans `common/` :
+Un **registre central et générique** (polymorphe), dans `common/`, **une seule table** :
 
 ```sql
 CREATE TABLE shares (
     id             SERIAL PRIMARY KEY,
     resource_type  VARCHAR(40) NOT NULL,   -- 'MAGIC_LIST', 'CALENDAR_EVENT', 'BANK_ACCOUNT', ...
     resource_id    INTEGER     NOT NULL,   -- id de l'élément dans sa table métier (PAS de FK : polymorphe)
-    family_id      INTEGER     NOT NULL REFERENCES families(id) ON DELETE CASCADE,
-    default_access SMALLINT    NOT NULL DEFAULT 6,   -- bitmask {0,4,6}
+    user_id        INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- bénéficiaire du grant
+    access         SMALLINT    NOT NULL,   -- bitmask {4, 6}
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (resource_type, resource_id)             -- au plus 1 partage par élément
-);
-
-CREATE TABLE share_overrides (
-    share_id  INTEGER  NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
-    user_id   INTEGER  NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
-    access    SMALLINT NOT NULL,             -- bitmask {0,4,6}
-    PRIMARY KEY (share_id, user_id)
+    UNIQUE (resource_type, resource_id, user_id)   -- au plus 1 grant par (ressource, user)
 );
 ```
 
 Conséquences :
-- **Une row `shares` n'existe que si l'élément est partagé.** Personnel = aucune row.
-- L'élément métier **garde son `owner_id`** ; le registre ne stocke **que** la config de partage
+- **Un grant n'existe que si l'élément est partagé à cet utilisateur.** Personnel = aucune row.
+- L'élément métier **garde son `owner_id`** ; le registre ne stocke **que** les grants
   (ni la propriété, ni le contenu).
 - `resource_id` **n'a pas de FK** (registre polymorphe) ⇒ supprimer un élément métier doit
-  **supprimer son partage explicitement** dans le usecase du domaine (pas de cascade DB).
-- Les `userId` référencent `users.id` (id **global**, pas `family_members.id`).
+  **supprimer ses grants explicitement** (pas de cascade DB possible sur une clé polymorphe).
+- Les `user_id` référencent `users.id` (id **global**).
 
-# Architecture (intégration hexagonale)
+> L'**architecture logicielle** (où vit ce module, découpage en couches, traits, injection) n'est
+> **pas** traitée ici : elle suit les **règles d'architecture clean/hexagonale** du projet.
 
-Module transverse `domains/common/sharing/`, structuré comme un domaine :
+# Erreurs & codes HTTP
 
-```
-domains/common/sharing/
-├── domain/
-│   ├── share.rs              # Share { id, resource_type, resource_id, family_id, default_access, overrides }
-│   ├── resource_type.rs      # enum ResourceType { MagicList, CalendarEvent, BankAccount, Recipe, MealPlan, … }
-│   ├── access.rs             # value object Access(u8) : NONE=0, READ=4, WRITE=6 ; can_read()/can_write()
-│   ├── member_access.rs      # { user_id, access }
-│   ├── share_repository.rs   # trait SharingRepository : find_by_resource, upsert, delete_by_resource
-│   └── errors.rs             # une enum par use case
-├── usecases/
-│   ├── resolve_access.rs     # applique les règles ci-dessus → Access effectif
-│   └── update_share.rs       # owner-only : pose / modifie / retire le partage d'une ressource
-└── repositories/
-    └── sqlx_share_repository.rs
-```
+Le partage suit le **principe d'erreur commun à tout le projet** (cf. CLAUDE.md), sans rien
+réinventer : chaque couche peut lever une erreur, **encapsulée et re-mappée à chaque couche
+traversée** (hexagonal), jusqu'au contrôleur, en conservant la **chaîne de causes** via `#[source]`.
 
-Comment un domaine s'en sert :
-- son `check_<x>_access` **délègue** à `resolve_access(ResourceType::X, resource_id, user, owner_id)`
-  au lieu de réimplémenter la logique ;
-- le usecase métier exploite l'`Access` retourné : pas de lecture → 404/403, pas d'écriture → 403,
-  action d'admin (rename/delete/partage) → exige `user == owner` ;
-- la **suppression** d'un élément appelle `delete_by_resource(...)` ;
-- `resolve_access` s'appuie sur le `FamilyRepository` existant pour l'appartenance famille
-  (seule dépendance `sharing → family`, **à acter dans un ADR** car déroge à l'indépendance des domaines) ;
-- `ActixState<DB>` reçoit un `share_repository` injecté comme les autres.
+- une erreur SQL → `RepositoryError` (`NotFound` / `Conflict` / `Technical(#[source] …)`) ;
+- wrappée par l'erreur **du use case** (variantes portant le contexte : `resource_id`, `user_id`) ;
+- convertie en `MiddlewareError` (`#[from]`) puis en réponse HTTP.
+
+Codes HTTP selon les **standards web** :
+
+| Situation | Code |
+|-----------|------|
+| Non authentifié | **401** |
+| Accès en lecture refusé (ni owner, ni grant) | **404** (on ne révèle pas l'existence) |
+| Action refusée alors qu'on a la lecture (écriture sans `w`, ou admin non-owner) | **403** |
+| Conflit (ex. grant déjà présent) | **409** |
+| Erreur technique | **500** (corps neutralisé, chaîne loggée) |
 
 # API
 
 Le registre est un **détail d'implémentation serveur** ; l'API reste **orientée ressource**
 (aligne le front, contrat de référence) :
-- chaque ressource renvoie son **bloc partage** : `visibility`, `familyId`, `defaultAccess`,
-  `memberOverrides` (`[{ userId, access }]`), et l'`access` effectif de l'appelant ;
-- la **mutation** du partage passe par un endpoint de la ressource
-  (ex. `PUT /families/{familyId}/magic-lists/{id}/share`, ou intégré au `PUT` de la ressource) ;
+- chaque ressource renvoie ses partages : `sharedWith` = `[{ userId, access }]`, l'`access`
+  effectif de l'appelant, et une **`visibility` dérivée** `PERSONAL`/`SHARED` (calculée back :
+  `SHARED` ⇔ `sharedWith` non vide) pour coller au badge de visibilité déjà affiché par le front ;
+- la **mutation** des partages passe par un endpoint de la ressource
+  (ex. `PUT /magic-lists/{id}/shares` avec la liste de grants voulue), exécuté **par l'owner** ;
+- « partager à la famille » s'exprime côté front comme un `sharedWith` peuplé des `userId` des
+  membres ; le back ne voit que des grants individuels ;
 - pas d'endpoint transverse de monitoring en itération 1 (le registre central le rendra trivial
   plus tard — hors-scope).
 
-Convention : JSON **camelCase**, valeurs d'`access` en **entiers** (`0` / `4` / `6`).
+Convention : JSON **camelCase**, valeurs d'`access` en **entiers** (`4` / `6`).
 
 # Exemple concret — magic_list
 
 magic_list est le premier consommateur et sert d'exemple de migration.
 
 **Avant** (modèle propre à magic_list) : colonnes `visibility`, `family_id`,
-`excluded_user_ids INTEGER[]` sur la table `magic_list`, et un `check_magic_list_access`
-maison.
+`excluded_user_ids INTEGER[]` sur la table `magic_list`, et un `check_magic_list_access` maison
+basé sur l'appartenance famille.
 
-**Après** (modèle transverse) :
+**Après** (modèle transverse par user) :
 - on **retire** `visibility`, `family_id`, `excluded_user_ids` de `magic_list` (on garde `owner_id`) ;
-- partage d'une liste = une row `shares(resource_type='MAGIC_LIST', resource_id=<listId>, family_id, default_access)`
-  + des `share_overrides` ;
+- partager une liste = des rows `shares(resource_type='MAGIC_LIST', resource_id=<listId>, user_id, access)` ;
 - `check_magic_list_access` délègue à `resolve_access(ResourceType::MagicList, listId, user, owner_id)` ;
-- droits : tout membre avec `w` peut ajouter/cocher/éditer/supprimer des **items** et nettoyer les
-  terminés ; seul l'owner renomme / règle le partage / supprime la liste (inchangé vs décision D3 de
-  magic_list, désormais exprimé via le bitmask).
+- droits : tout user avec `w` peut ajouter/cocher/éditer/supprimer des **items** et nettoyer les
+  terminés ; seul l'owner renomme / gère les partages / supprime la liste.
 
 **Migration des données existantes :**
-- pour chaque liste `SHARED` : créer la row `shares` avec `default_access = 6` (l'ancien partage
-  était collaboratif) ;
-- chaque `excluded_user_id` → un `share_override(user_id, access = 0)` ;
-- puis **drop** des colonnes devenues inutiles.
+- pour chaque liste `SHARED` : créer un grant `access = 6` (l'ancien partage était collaboratif)
+  **pour chaque membre de la famille cible** sauf ceux présents dans `excluded_user_ids` ;
+- puis **drop** des colonnes `visibility`, `family_id`, `excluded_user_ids`.
 
-> ⚠️ La section « Accès & partage » de `magic_list.md` est **supersédée** par ce document et sera
-> amendée une fois ce modèle figé.
+> La section « Accès & partage » de `magic_list.md` a été **amendée** pour suivre ce modèle (par user,
+> bitmask, owner-only admin).
 
 # Edge cases
 
-1. **Sortie de famille / owner qui quitte.** L'accès dépend de l'appartenance **courante** : un
-   membre qui quitte la famille perd l'accès aux éléments partagés. La row `shares` reste celle de
-   l'owner. *(à approfondir : que devient un élément partagé si l'owner quitte la famille cible ?)*
-2. **Suppression d'une famille.** `ON DELETE CASCADE` sur `shares.family_id` retire les partages ;
-   les éléments redeviennent personnels (plus de row). *(à confirmer : comportement voulu ?)*
-3. **Override d'un non-membre.** Un `share_override` pour un `userId` qui n'est pas (ou plus) membre
-   de la famille est **inopérant** (la règle 3 de résolution coupe avant). On peut le laisser en base
-   sans effet, ou le nettoyer.
-4. **Bascule `SHARED → PERSONAL`.** = suppression de la row `shares` (et ses overrides en cascade).
-5. **Valeurs de bitmask hors {0,4,6}.** Rejet à l'écriture (validation) en itération 1.
+1. **Membre rejoint la famille après coup** : pas d'accès automatique (snapshot). Front propose
+   éventuellement un « re-partager ».
+2. **Membre quitte la famille** : son grant reste valide tant que l'owner ne le révoque pas
+   (pas de check d'appartenance). Front peut proposer un nettoyage.
+3. **Suppression d'un utilisateur** : `ON DELETE CASCADE` sur `shares.user_id` retire ses grants.
+4. **Bascule `SHARED → PERSONAL`** : = retirer tous les grants.
+5. **Valeurs de bitmask hors {4,6}** : rejet à l'écriture (validation) en itération 1.
+6. **Grant sur soi-même / sur l'owner** : ignoré / interdit (l'owner a déjà plein accès).
 
 # Reste à traiter (brainstorm)
 
-- Section archi : valider le module `common/sharing/` et la dépendance `sharing → family` (ADR).
-- Approfondir edge cases 1 et 2 (owner quitte / suppression famille).
-- Mapping d'erreurs précis (`status_code`).
-- Stratégie d'implémentation détaillée + ADR.
+- ✅ `magic_list.md` amendé (1er consommateur) pour suivre ce modèle.
+- (Implémentation/architecture : hors brainstorm — suivra les règles d'archi du projet.)
 
 # Journal de décisions (révisables)
 
 - **T1 — Granularité** : partage **par élément** (généralisation de magic_list), pas d'« espaces ».
-- **T2 — Droits = bitmask Linux** : `r=4`, `w=2`, `x=1` (réservé). `w` implique `r` ⇒ valeurs valides
-  `{0, 4, 6}`.
-- **T3 — Administration owner-only** : rename / partage / suppression réservés à l'owner ; l'écriture
-  ne porte que sur le contenu.
-- **T4 — Clé membre = `user_id` global** (exposé `userId`).
-- **T5 — Registre central générique** dans `common/` (tables `shares` + `share_overrides`), **row
-  uniquement si partagé** ; l'élément garde `owner_id`. Déroge à l'indépendance des domaines → ADR.
-- **T6 — Résolution d'accès** : owner → plein + admin ; sinon row de partage ; membre courant requis ;
-  override sinon `defaultAccess`. Multi-familles : famille **cible**, pas famille active.
-- **T7 — API embarquée par ressource**, registre interne ; pas d'endpoint monitoring en itération 1.
-- **T8 — Famille étendue = simples membres** (relation GRAND_PARENT/UNCLE/AUNT), pas de mécanisme séparé.
-- **T9 — `defaultAccess` par défaut = `6`** (collaboratif) à la création d'un partage.
+- **T2 — Droits = bitmask Linux** : `r=4`, `w=2`, `x=1` (réservé). `w` implique `r` ⇒ un grant vaut
+  `4` ou `6` ; pas de grant = aucun accès.
+- **T3 — Administration owner-only** : rename / partages / suppression réservés à l'owner ;
+  l'écriture ne porte que sur le contenu.
+- **T4 — Clé bénéficiaire = `user_id` global** (exposé `userId`).
+- **T5 — Registre central générique** dans `common/`, **une seule table `shares`** de grants
+  `(resource_type, resource_id, user_id, access)`, **row uniquement si partagé** ; l'élément garde
+  `owner_id`.
+- **T6 — Résolution d'accès** : owner → plein + admin ; sinon grant `(R, user)` ; sinon aucun accès.
+  **Pas de check d'appartenance famille.**
+- **T7 — API embarquée par ressource** (`sharedWith` + `access` effectif + `visibility` dérivée
+  `PERSONAL`/`SHARED`), registre interne ; pas d'endpoint monitoring en itération 1.
+- **T8 — Le partage est PAR USER.** « Partager à une famille » = **commodité du front** (expansion
+  en N grants individuels) + regroupement à l'affichage. Le back ne connaît pas les familles dans le
+  partage. Conséquences assumées : snapshot (pas d'héritage dynamique) ; quitter la famille ne retire
+  pas l'accès.
+- **T9 — Erreurs & HTTP** : suit le **principe projet** (encapsulation + re-mapping à chaque couche,
+  chaîne `#[source]`, remontée au contrôleur). Codes **standards web** : 401 / 404 (lecture refusée,
+  non révélée) / 403 (écriture sans `w` ou admin non-owner) / 409 / 500.

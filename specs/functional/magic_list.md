@@ -21,15 +21,15 @@ pub struct MagicList {
     pub id: i32,
     pub name: String,
     pub list_type: MagicListType,
-    pub owner_username: String,
-    pub visibility: Visibility,
-    pub family_id: Option<i32>,        // requis si Shared, None si Personal
-    pub excluded_member_ids: Vec<i32>, // membres de la famille privés d'accès
+    pub owner_username: String,        // owner : seul à administrer la liste
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
 
-pub enum Visibility { Shared, Personal }
+// La visibilité, le partage et les droits NE sont PAS portés par magic_list :
+// ils relèvent du mécanisme transverse (cf. specs/functional/transverse_partage.md).
+// La table magic_list ne garde donc que owner_id ; aucune colonne family_id /
+// visibility / excluded_user_ids.
 
 pub enum MagicListType { Simple, Task, Template }
 
@@ -48,7 +48,9 @@ pub struct MagicListItem {
 pub enum MagicListItemStatus { Todo, InProgress, Done }
 ```
 
-**Convention JSON** : l'API expose du **camelCase** (`magicListType`, `dueDate`, `familyId`, `excludedMemberIds`, `itemCount`, `createdAt`, `updatedAt`) pour s'aligner sur le contrat front. Les enums sont sérialisés en `SCREAMING_SNAKE` (`SIMPLE`, `TASK`, `TEMPLATE`, `SHARED`, `PERSONAL`, `TODO`, `IN_PROGRESS`, `DONE`).
+**Convention JSON** : l'API expose du **camelCase** (`magicListType`, `dueDate`, `itemCount`, `createdAt`, `updatedAt`) pour s'aligner sur le contrat front. Les enums sont sérialisés en `SCREAMING_SNAKE` (`SIMPLE`, `TASK`, `TEMPLATE`, `TODO`, `IN_PROGRESS`, `DONE`).
+
+Les champs de **partage** (`visibility` dérivée `PERSONAL`/`SHARED`, `sharedWith` = `[{ userId, access }]`, `access` effectif de l'appelant) sont **ajoutés à la vue par la couche de partage transverse** (cf. `transverse_partage.md`), pas par magic_list elle-même.
 
 # Les types de liste et le modèle de complétion
 
@@ -67,21 +69,20 @@ Deux mécanismes de « fait » cohabitent — `checked` (booléen, modèle liste
 ## Création
 En tant qu'utilisateur, je crée une magic list en spécifiant :
 - un **nom** ;
-- un **type** (SIMPLE / TASK / TEMPLATE) ;
-- la **visibilité** : partagée avec la famille (`SHARED`) ou personnelle (`PERSONAL`) ;
-- si partagée : les **membres exclus** (par défaut toute la famille active y a accès).
+- un **type** (SIMPLE / TASK / TEMPLATE).
 
-Règles :
-- `SHARED` ⇒ `familyId` requis. `PERSONAL` ⇒ `familyId` non envoyé / `None`.
-- `excludedMemberIds` n'a de sens que si `SHARED`.
+À la création, la liste est **personnelle** (aucun partage). Le partage est une **action distincte**
+gérée par le mécanisme transverse (cf. `transverse_partage.md`) : l'owner accorde des **grants** par
+utilisateur ; « partager à la famille » est une commodité du front (un grant par membre).
 
 ## Modification
-- Renommer la liste.
-- Changer la visibilité (`PERSONAL` ⇄ `SHARED`).
-- Ajouter / retirer des membres exclus.
+- Renommer la liste (owner uniquement).
+- **Gérer le partage** (ajouter/retirer/modifier les grants) : action **owner-only** qui passe par
+  l'endpoint de partage transverse, pas par l'édition de la liste.
 
 ## Suppression
-- Supprimer une liste supprime ses items (cascade).
+- Supprimer une liste supprime ses items (cascade) **et ses grants de partage** (suppression explicite,
+  registre polymorphe — cf. `transverse_partage.md`).
 - **Supprimer un TEMPLATE ne supprime PAS les listes générées à partir de lui** (aucun lien dur / FK cascade ; cf. Templates).
 
 # Items d'une liste
@@ -106,15 +107,17 @@ Un template est une liste de type TEMPLATE servant de modèle réutilisable.
 
 # Accès & partage
 
-Règle d'accès (lecture) :
-- l'**owner** a toujours accès à ses listes (perso comme partagées) ;
-- un non-owner a accès **uniquement si** la liste est `SHARED`, possède un `familyId`, que l'utilisateur est **membre de cette famille** **et qu'il n'est pas dans `excludedMemberIds`**.
+> Le **mécanisme** d'accès/partage est **transverse** (cf. `transverse_partage.md`) — partage par
+> user, droits bitmask (`4` lecture / `6` écriture), résolution `owner → grant → rien`. Cette section
+> n'en décrit que l'**application à magic_list**.
 
-> **Décision D5** : `excludedMemberIds` doit être **appliqué** dans le check d'accès (aujourd'hui stocké mais ignoré).
-
-Droits d'écriture sur une liste partagée (décision D3 — **collaboratif, admin owner**) :
-- tout membre ayant accès peut **ajouter / cocher / éditer / supprimer des ITEMS** et nettoyer les terminés ;
-- seul l'**owner** peut **renommer, changer visibilité/exclusions, supprimer la LISTE**, ou la régénérer depuis un template.
+- l'**owner** a toujours plein accès à ses listes **et** est le seul à les **administrer** ;
+- un non-owner accède à une liste **uniquement s'il a un grant** dessus ; son droit (`4` ou `6`) est
+  résolu par la couche transverse ;
+- **écriture (`6`)** sur une liste = **collaborer sur les ITEMS** : ajouter / cocher / éditer /
+  supprimer des items, nettoyer les terminés ;
+- **lecture seule (`4`)** = voir la liste et ses items, sans modification ;
+- **owner uniquement** : renommer, gérer le partage, supprimer la liste, régénérer depuis un template.
 
 # Visualisation
 
@@ -133,10 +136,10 @@ Droits d'écriture sur une liste partagée (décision D3 — **collaboratif, adm
 
 # Edge cases recensés
 
-1. **Listes perso & multi-familles** : une liste `PERSONAL` (`familyId = null`) appartient à l'utilisateur, pas à une famille. Décision : elle est **globale à l'utilisateur** et visible quel que soit le contexte famille actif. (À reconfirmer si l'UX impose un rattachement.)
-2. **Passage SHARED → PERSONAL** : on conserve `familyId`/`excludedMemberIds` en base mais ils deviennent inopérants ; la liste sort de la vue famille des autres membres.
-3. **Owner quitte la famille** : la liste partagée reste celle de l'owner ; définir si elle reste visible aux autres (proposition : non — l'accès dépend de l'appartenance courante).
-4. **Membre exclu** : ne voit pas la liste dans le résumé, 403 sur accès direct.
+1. **Listes perso & multi-familles** : une liste sans grant est **globale à l'owner**, visible quel que soit le contexte famille actif (le partage est par user, pas rattaché à une famille — cf. `transverse_partage.md`).
+2. **Passage SHARED → PERSONAL** : = **retirer tous les grants** ; la liste disparaît des vues des autres.
+3. **Owner / membre quitte la famille** : sans check d'appartenance, les grants existants **restent valides** tant que l'owner ne les révoque pas (cf. edge cases transverses).
+4. **Membre sans grant** : ne voit pas la liste dans le résumé ; **404** sur accès direct (on ne révèle pas l'existence).
 5. **Réordonnancement manuel** : pas de colonne `position` aujourd'hui → drag&drop non supporté en phase 1 (tri par nom/statut/checked seulement). À ajouter (colonne `position`) si besoin ultérieur.
 6. **`dueDate` & fuseau** : comparaison « en retard » sur la date locale du jour.
 7. **Suppression de template** : ne casse pas les instances (pas de FK).
@@ -150,29 +153,36 @@ Le back doit rattraper les routes déjà attendues par le front. Endpoints à aj
 
 | Méthode | Route | À faire |
 |---|---|---|
-| `GET` | `/families/{familyId}/magic-lists/{id}` | nouvelle : détail + items |
-| `PUT` | `/families/{familyId}/magic-lists/{id}` | nouvelle : rename + visibilité + exclusions |
-| `DELETE` | `/families/{familyId}/magic-lists/{id}` | nouvelle |
+| `GET` | `/families/{familyId}/magic-lists/{id}` | nouvelle : détail + items (+ bloc partage de la couche transverse) |
+| `PUT` | `/families/{familyId}/magic-lists/{id}` | nouvelle : **rename** (owner) — plus de visibilité/exclusions ici |
+| `PUT` | `/families/{familyId}/magic-lists/{id}/shares` | nouvelle : **gérer les grants** (owner-only) — délègue au partage transverse |
+| `DELETE` | `/families/{familyId}/magic-lists/{id}` | nouvelle (supprime items + grants) |
 | `DELETE` | `/families/{familyId}/magic-lists/{id}/items/{itemId}` | nouvelle (réponse = liste complète) |
 | `DELETE` | `/families/{familyId}/magic-lists/{id}/items/completed` | nouvelle (règle « terminé » unifiée) |
+
+> ⚠️ Le préfixe `/families/{familyId}/` provient du contrat front initial mais **ne colle plus** au
+> modèle (le partage est par user, pas scopé famille). À reconfirmer avec le front : soit on le garde
+> comme simple contexte d'affichage, soit on bascule sur `/magic-lists/{id}`. Hors périmètre brainstorm.
 
 Travaux transverses au domaine :
 - Sérialiser `createdAt` / `updatedAt` dans les vues (liste, summary, items).
 - Convention **camelCase** sur tous les DTO d'entrée/sortie (`#[serde(rename_all = "camelCase")]`).
 - Les mutations d'item renvoient la **MagicList complète** (alignement front).
-- Brancher `excludedMemberIds` dans `check_magic_list_access`.
-- Appliquer les droits D3 (collaboratif items / admin owner liste).
+- Brancher le **partage transverse** : `check_magic_list_access` délègue à la résolution d'accès
+  transverse ; ajout du bloc partage (`visibility`/`sharedWith`/`access`) dans les vues.
+- Appliquer les droits (écriture `6` ⇒ items ; owner ⇒ admin de la liste — cf. section Accès & partage).
 
-Par couche (selon l'archi du projet — controller → middleware → usecase → domain → repository) :
-- **usecases** : `get_magic_list_by_id`, `update_magic_list`, `delete_magic_list`, `delete_item_from_magic_list`, `clear_completed_items`. Réutiliser `check_magic_list_access` (étendu aux exclusions et aux droits owner-vs-membre).
-- **domain** : commande `UpdateMagicListCommand` (name, visibility, excluded_member_ids). Erreurs : une enum par use case dans `domain/errors.rs`.
+Par couche (controller → middleware → usecase → domain → repository) :
+- **usecases** : `get_magic_list_by_id`, `update_magic_list` (rename), `delete_magic_list` (+ purge des grants), `delete_item_from_magic_list`, `clear_completed_items`. `check_magic_list_access` s'appuie sur la résolution d'accès transverse.
+- **domain** : commande `UpdateMagicListCommand` (**name** uniquement). Erreurs : une enum par use case dans `domain/errors.rs`.
 - **repository (trait + sqlx)** : `find_by_id`, `update`, `delete`, `delete_item`, `delete_completed_items`, `find_items_by_list_id`.
+- **partage** : la gestion des grants et la résolution d'accès viennent du mécanisme transverse (cf. `transverse_partage.md`) — pas réimplémentées dans magic_list.
 - **http** : DTO requêtes/vues camelCase, nouvelles routes dans le controller, middlewares qui dépaquettent et délèguent.
-- **MiddlewareError** : variantes `#[from]` pour les nouveaux use-case errors + mapping `status_code()` (403 accès, 404 introuvable).
+- **MiddlewareError** : variantes `#[from]` pour les nouveaux use-case errors + mapping `status_code()` (404 lecture refusée, 403 écriture/owner).
 - **mocks + tests** : mettre à jour le mock repo et tester chaque couche.
 
 ## Phase 2 — Templates
-- Endpoint de génération : `POST /families/{familyId}/magic-lists/{templateId}/generate` (payload : `name`, `type` cible SIMPLE|TASK, `visibility`, `excludedMemberIds?`).
+- Endpoint de génération : `POST /families/{familyId}/magic-lists/{templateId}/generate` (payload : `name`, `type` cible SIMPLE|TASK). L'instance générée est **personnelle** ; le partage se fait ensuite via l'endpoint de partage (transverse).
 - Usecase `generate_list_from_template` : charge le template + ses items, crée une nouvelle liste indépendante, copie les items en réinitialisant `checked`/`status`.
 - Aucune contrainte FK template→instance.
 - Ajouter l'UI front (le mock et le front ne l'ont pas encore → le contrat est à créer, pas à aligner).
@@ -181,8 +191,8 @@ Par couche (selon l'archi du projet — controller → middleware → usecase �
 
 - **D1** — 3 types conservés ; `checked` et `status` coexistent sur TASK ; checkbox affichée pour TASK uniquement.
 - **D2** — Contenu d'item **facultatif** (titre seul obligatoire). Corrige la spec initiale.
-- **D3** — Liste partagée **collaborative sur les items**, **admin (rename/visibilité/suppression) réservé à l'owner**.
+- **D3** — Liste partagée : **écriture (`6`) = collaboratif sur les items**, **admin (rename/partage/suppression) réservé à l'owner**. *(Exprimé désormais via le bitmask transverse — cf. `transverse_partage.md`.)*
 - **D4** — Templates traités en **Phase 2** (après la parité CRUD).
-- **D5** — `excludedMemberIds` **appliqué** dans le contrôle d'accès.
+- ~~**D5** — `excludedMemberIds` appliqué dans le contrôle d'accès.~~ **Obsolète** : `excludedMemberIds`/`familyId`/`visibility` n'existent plus sur magic_list ; le partage est **par user** via le mécanisme transverse (`transverse_partage.md`). Exclure = ne pas créer de grant.
 - Règle **« terminé »** = `checked || status==DONE` (unifie nettoyage + regroupement).
 - **Filtres/recherche/tri** côté **front** en phase 1.

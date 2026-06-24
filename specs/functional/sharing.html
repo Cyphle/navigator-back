@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sharing (cross-cutting concept)</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#666; --line:#d0d0d0; --code-bg:#f4f4f4; }
+  body { color:var(--ink); background:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; max-width:50rem; margin:2rem auto; padding:0 1.25rem; }
+  h1 { font-size:1.5rem; margin:0 0 .25rem; }
+  h2 { font-size:1.15rem; margin:2rem 0 .5rem; border-bottom:1px solid var(--line); padding-bottom:.2rem; }
+  h3 { font-size:1rem; margin:1.25rem 0 .4rem; }
+  p,ul,ol,table,pre { margin:.5rem 0; }
+  ul,ol { padding-left:1.4rem; } li { margin:.15rem 0; }
+  strong { font-weight:600; }
+  dl.meta { display:grid; grid-template-columns:max-content 1fr; gap:.1rem .75rem; margin:.5rem 0 1.5rem; font-size:.9rem; color:var(--muted); }
+  dl.meta dt { font-weight:600; } dl.meta dd { margin:0; }
+  table { border-collapse:collapse; width:100%; font-size:.95rem; }
+  th,td { border:1px solid var(--line); padding:.35rem .6rem; text-align:left; vertical-align:top; }
+  th { font-weight:600; background:var(--code-bg); }
+  code { font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; background:var(--code-bg); padding:.05rem .3rem; border-radius:2px; font-size:.9em; }
+  pre { background:var(--code-bg); padding:.75rem 1rem; overflow-x:auto; border:1px solid var(--line); border-radius:2px; } pre code { background:none; padding:0; }
+</style>
+</head>
+<body>
+<h1>Sharing (cross-cutting concept)</h1>
+<dl class="meta">
+  <dt>Date</dt><dd>2026-06-24</dd>
+  <dt>Status</dt><dd>brainstorm complete — see decisions journal (T1→T9) at the end</dd>
+</dl>
+<p>This is not a functional theme but a <strong>central mechanism</strong>: every shareable domain (magic_list, calendar, accounts, recipes, meals, …) relies on it. Goal: <strong>one single sharing mechanism</strong>, a <strong>common user journey</strong>, and <strong>unified monitoring</strong>.</p>
+
+<h2>Base principle</h2>
+<p>By default, <strong>nothing is shared</strong>: every element is <strong>personal</strong> (belongs to its creator). It can then be <strong>shared</strong> with <strong>other users</strong>.</p>
+<p><strong>Sharing is done per user.</strong> The back only reasons in <strong>individual grants</strong> <code>(resource → user → right)</code>. It <strong>does not know the notion of "share with a family"</strong>: that is a <strong>frontend convenience</strong> (see below).</p>
+
+<h2>The 3 key notions</h2>
+<h3>1. Visibility (derived)</h3>
+<ul>
+  <li><code>PERSONAL</code>: no grant → only the owner has access.</li>
+  <li><code>SHARED</code>: at least one grant exists.</li>
+</ul>
+<p>Visibility is <strong>not</strong> a column: it is <strong>derived</strong> from the existence of grants.</p>
+
+<h3>2. Ownership (owner)</h3>
+<p>Every element has an <strong>owner</strong> (its creator). The owner is <strong>above the rights</strong>: only they can <strong>administer</strong> the element — <strong>rename</strong> it, <strong>manage its sharing</strong> (add/remove grants) and <strong>delete</strong> it. Administration is <strong>never delegated</strong> (even a user with write cannot administer).</p>
+
+<h3>3. Access rights — Linux-style bitmask</h3>
+<p>Rights apply to the <strong>content</strong> of the element (the items of a list, the events of a calendar, etc.). We reuse the Linux permission encoding:</p>
+<table>
+  <tr><th>Bit</th><th>Right</th><th>Value</th></tr>
+  <tr><td><code>r</code></td><td>read</td><td><strong>4</strong></td></tr>
+  <tr><td><code>w</code></td><td>write</td><td><strong>2</strong></td></tr>
+  <tr><td><code>x</code></td><td>(reserved, unused)</td><td>1</td></tr>
+</table>
+<p>Write <strong>implies</strong> read. In iteration 1, a grant carries one of these <strong>2 values</strong>:</p>
+<table>
+  <tr><th>Value</th><th>Meaning</th><th>Notation</th></tr>
+  <tr><td><code>4</code></td><td>read-only</td><td><code>r--</code></td></tr>
+  <tr><td><code>6</code></td><td>read + write</td><td><code>rw-</code></td></tr>
+</table>
+<p>No grant = <strong>no access</strong> (equivalent to <code>0</code> / <code>---</code>). Testing rights: <code>access &amp; 4</code> ⇒ can read · <code>access &amp; 2</code> ⇒ can write.</p>
+
+<h2>Sharing an element</h2>
+<p>The owner shares an element by creating <strong>grants</strong>: for each <code>userId</code>, a right (<code>4</code> or <code>6</code>).</p>
+<ul>
+  <li>Add a grant = give access to a user.</li>
+  <li>Change a grant = change its right (<code>4</code> ⇄ <code>6</code>).</li>
+  <li>Remove a grant = cut access (the element becomes personal again if none remain).</li>
+</ul>
+
+<h2>How access is resolved</h2>
+<p>Effective access of a user <strong>U</strong> on a resource <strong>R</strong>:</p>
+<ol>
+  <li>if <strong>U == owner(R)</strong> → <strong>full access</strong> (<code>rw</code>) <strong>+ administration</strong>;</li>
+  <li>otherwise, if a <strong>grant</strong> exists for <code>(R, U)</code> → the right of that grant (<code>4</code> or <code>6</code>);</li>
+  <li>otherwise → <strong>no access</strong>.</li>
+</ol>
+<p>No family-membership check: the individual grant <strong>is</strong> the source of truth. Administration (rename / sharing / deletion) stays <strong>owner-only</strong>, independent of the bitmask.</p>
+
+<h2>"Share with the family" = frontend convenience</h2>
+<p>On the back side, <strong>no notion of family in sharing</strong>. On the front side:</p>
+<ul>
+  <li>"Share with my family" = the front <strong>iterates the members</strong> of the family and creates <strong>one grant per user</strong> (chosen right, e.g. <code>6</code>). Excluding someone = <strong>not creating their grant</strong>.</li>
+  <li>The <strong>display</strong> may <strong>group</strong> grants by family ("shared with the Dupont family"); this is purely presentation.</li>
+</ul>
+<p><strong>Accepted consequences:</strong></p>
+<ul>
+  <li><strong>Snapshot, not dynamic:</strong> a member who joins the family <em>after</em> the share does <strong>not</strong> get automatic access. The front can re-offer a "re-share with the family".</li>
+  <li><strong>Leaving the family does not remove access:</strong> with no membership check, a grant stays valid until the owner revokes it. (The front can offer a cleanup action.)</li>
+</ul>
+<p>This choice <strong>radically simplifies the back</strong>: no <code>family_id</code>, no default level, no overrides, no <code>sharing → family</code> dependency.</p>
+
+<h2>Data model</h2>
+<p>A <strong>central, generic (polymorphic) registry</strong>, in <code>common/</code>, <strong>one single table</strong>:</p>
+<pre><code>CREATE TABLE shares (
+    id             SERIAL PRIMARY KEY,
+    resource_type  VARCHAR(40) NOT NULL,   -- 'MAGIC_LIST', 'CALENDAR_EVENT', 'BANK_ACCOUNT', ...
+    resource_id    INTEGER     NOT NULL,   -- id of the element in its business table (NO FK: polymorphic)
+    user_id        INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- grant beneficiary
+    access         SMALLINT    NOT NULL,   -- bitmask {4, 6}
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (resource_type, resource_id, user_id)   -- at most 1 grant per (resource, user)
+);</code></pre>
+<p>Consequences:</p>
+<ul>
+  <li><strong>A grant exists only if the element is shared with that user.</strong> Personal = no row.</li>
+  <li>The business element <strong>keeps its <code>owner_id</code></strong>; the registry stores <strong>only</strong> the grants (neither ownership nor content).</li>
+  <li><code>resource_id</code> <strong>has no FK</strong> (polymorphic registry) ⇒ deleting a business element must <strong>delete its grants explicitly</strong> (no DB cascade possible on a polymorphic key).</li>
+  <li><code>user_id</code> references <code>users.id</code> (<strong>global</strong> id).</li>
+</ul>
+<p>The <strong>software architecture</strong> (where this module lives, layering, traits, injection) is <strong>not</strong> covered here: it follows the project's clean/hexagonal architecture rules.</p>
+
+<h2>Errors &amp; HTTP codes</h2>
+<p>Sharing follows the <strong>common error principle of the whole project</strong> (see CLAUDE.md), reinventing nothing: each layer can raise an error, <strong>wrapped and re-mapped at each traversed layer</strong> (hexagonal), up to the controller, preserving the <strong>cause chain</strong> via <code>#[source]</code>.</p>
+<ul>
+  <li>a SQL error → <code>RepositoryError</code> (<code>NotFound</code> / <code>Conflict</code> / <code>Technical(#[source] …)</code>);</li>
+  <li>wrapped by the <strong>use-case</strong> error (variants carrying context: <code>resource_id</code>, <code>user_id</code>);</li>
+  <li>converted to <code>MiddlewareError</code> (<code>#[from]</code>) then to an HTTP response.</li>
+</ul>
+<p>HTTP codes per <strong>standard web codes</strong>:</p>
+<table>
+  <tr><th>Situation</th><th>Code</th></tr>
+  <tr><td>Not authenticated</td><td><strong>401</strong></td></tr>
+  <tr><td>Read access denied (neither owner nor grant)</td><td><strong>404</strong> (we do not reveal existence)</td></tr>
+  <tr><td>Action denied while having read (write without <code>w</code>, or admin by non-owner)</td><td><strong>403</strong></td></tr>
+  <tr><td>Conflict (e.g. grant already present)</td><td><strong>409</strong></td></tr>
+  <tr><td>Technical error</td><td><strong>500</strong> (body neutralized, chain logged)</td></tr>
+</table>
+
+<h2>API</h2>
+<p>The registry is a <strong>server implementation detail</strong>; the API stays <strong>resource-oriented</strong> (aligns the front, reference contract):</p>
+<ul>
+  <li>each resource returns its shares: <code>sharedWith</code> = <code>[{ userId, access }]</code>, the caller's effective <code>access</code>, and a <strong>derived <code>visibility</code></strong> <code>PERSONAL</code>/<code>SHARED</code> (computed back-side: <code>SHARED</code> ⇔ <code>sharedWith</code> non-empty) to match the visibility badge already shown by the front;</li>
+  <li>the <strong>mutation</strong> of shares goes through a resource endpoint (e.g. <code>PUT /magic-lists/{id}/shares</code> with the desired list of grants), executed <strong>by the owner</strong>;</li>
+  <li>"share with the family" is expressed front-side as a <code>sharedWith</code> populated with the members' <code>userId</code>; the back only sees individual grants;</li>
+  <li>no cross-cutting monitoring endpoint in iteration 1 (the central registry will make it trivial later — out of scope).</li>
+</ul>
+<p>Convention: JSON <strong>camelCase</strong>, <code>access</code> values as <strong>integers</strong> (<code>4</code> / <code>6</code>).</p>
+
+<h2>Concrete example — magic_list</h2>
+<p>magic_list is the first consumer and serves as a migration example.</p>
+<p><strong>Before</strong> (model specific to magic_list): columns <code>visibility</code>, <code>family_id</code>, <code>excluded_user_ids INTEGER[]</code> on the <code>magic_list</code> table, and a homemade <code>check_magic_list_access</code> based on family membership.</p>
+<p><strong>After</strong> (cross-cutting per-user model):</p>
+<ul>
+  <li>we <strong>remove</strong> <code>visibility</code>, <code>family_id</code>, <code>excluded_user_ids</code> from <code>magic_list</code> (we keep <code>owner_id</code>);</li>
+  <li>sharing a list = rows <code>shares(resource_type='MAGIC_LIST', resource_id=&lt;listId&gt;, user_id, access)</code>;</li>
+  <li><code>check_magic_list_access</code> delegates to <code>resolve_access(ResourceType::MagicList, listId, user, owner_id)</code>;</li>
+  <li>rights: any user with <code>w</code> can add/check/edit/delete <strong>items</strong> and clear the completed ones; only the owner renames / manages sharing / deletes the list.</li>
+</ul>
+<p><strong>Migration of existing data:</strong></p>
+<ul>
+  <li>for each <code>SHARED</code> list: create a grant <code>access = 6</code> (the old sharing was collaborative) <strong>for each member of the target family</strong> except those present in <code>excluded_user_ids</code>;</li>
+  <li>then <strong>drop</strong> the columns <code>visibility</code>, <code>family_id</code>, <code>excluded_user_ids</code>.</li>
+</ul>
+<p>The "Access &amp; sharing" section of <a href="magic-list.html">magic-list.html</a> has been <strong>amended</strong> to follow this model (per user, bitmask, owner-only admin).</p>
+
+<h2>Edge cases</h2>
+<ol>
+  <li><strong>Member joins the family afterwards:</strong> no automatic access (snapshot). Front possibly offers a "re-share".</li>
+  <li><strong>Member leaves the family:</strong> their grant stays valid until the owner revokes it (no membership check). Front may offer a cleanup.</li>
+  <li><strong>Deleting a user:</strong> <code>ON DELETE CASCADE</code> on <code>shares.user_id</code> removes their grants.</li>
+  <li><strong>SHARED → PERSONAL switch:</strong> = remove all grants.</li>
+  <li><strong>Bitmask values outside {4,6}:</strong> rejected on write (validation) in iteration 1.</li>
+  <li><strong>Grant on oneself / on the owner:</strong> ignored / forbidden (the owner already has full access).</li>
+</ol>
+
+<h2>Remaining to address (brainstorm)</h2>
+<ul>
+  <li>(done) <a href="magic-list.html">magic-list.html</a> amended (1st consumer) to follow this model.</li>
+  <li>(Implementation/architecture: out of brainstorm — follows the project's architecture rules.)</li>
+</ul>
+
+<h2>Decisions journal (revisable)</h2>
+<ul>
+  <li><strong>T1 — Granularity:</strong> sharing <strong>per element</strong> (generalization of magic_list), no "spaces".</li>
+  <li><strong>T2 — Rights = Linux bitmask:</strong> <code>r=4</code>, <code>w=2</code>, <code>x=1</code> (reserved). <code>w</code> implies <code>r</code> ⇒ a grant is <code>4</code> or <code>6</code>; no grant = no access.</li>
+  <li><strong>T3 — Owner-only administration:</strong> rename / sharing / deletion reserved to the owner; write only applies to content.</li>
+  <li><strong>T4 — Beneficiary key = global <code>user_id</code></strong> (exposed as <code>userId</code>).</li>
+  <li><strong>T5 — Central generic registry</strong> in <code>common/</code>, <strong>one single <code>shares</code> table</strong> of grants <code>(resource_type, resource_id, user_id, access)</code>, <strong>row only if shared</strong>; the element keeps <code>owner_id</code>.</li>
+  <li><strong>T6 — Access resolution:</strong> owner → full + admin; otherwise grant <code>(R, user)</code>; otherwise no access. <strong>No family-membership check.</strong></li>
+  <li><strong>T7 — API embedded per resource</strong> (<code>sharedWith</code> + effective <code>access</code> + derived <code>visibility</code> <code>PERSONAL</code>/<code>SHARED</code>), internal registry; no monitoring endpoint in iteration 1.</li>
+  <li><strong>T8 — Sharing is PER USER.</strong> "Share with a family" = <strong>frontend convenience</strong> (expansion into N individual grants) + display grouping. The back does not know families in sharing. Accepted consequences: snapshot (no dynamic inheritance); leaving the family does not remove access.</li>
+  <li><strong>T9 — Errors &amp; HTTP:</strong> follows the <strong>project principle</strong> (wrapping + re-mapping at each layer, <code>#[source]</code> chain, propagation to the controller). <strong>Standard web codes:</strong> 401 / 404 (read denied, not revealed) / 403 (write without <code>w</code> or admin by non-owner) / 409 / 500.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Magic List</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#666; --line:#d0d0d0; --code-bg:#f4f4f4; }
+  body { color:var(--ink); background:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; max-width:50rem; margin:2rem auto; padding:0 1.25rem; }
+  h1 { font-size:1.5rem; margin:0 0 .25rem; }
+  h2 { font-size:1.15rem; margin:2rem 0 .5rem; border-bottom:1px solid var(--line); padding-bottom:.2rem; }
+  h3 { font-size:1rem; margin:1.25rem 0 .4rem; }
+  p,ul,ol,table,pre { margin:.5rem 0; }
+  ul,ol { padding-left:1.4rem; } li { margin:.15rem 0; }
+  strong { font-weight:600; }
+  dl.meta { display:grid; grid-template-columns:max-content 1fr; gap:.1rem .75rem; margin:.5rem 0 1.5rem; font-size:.9rem; color:var(--muted); }
+  dl.meta dt { font-weight:600; } dl.meta dd { margin:0; }
+  table { border-collapse:collapse; width:100%; font-size:.95rem; }
+  th,td { border:1px solid var(--line); padding:.35rem .6rem; text-align:left; vertical-align:top; }
+  th { font-weight:600; background:var(--code-bg); }
+  code { font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; background:var(--code-bg); padding:.05rem .3rem; border-radius:2px; font-size:.9em; }
+  pre { background:var(--code-bg); padding:.75rem 1rem; overflow-x:auto; border:1px solid var(--line); border-radius:2px; } pre code { background:none; padding:0; }
+  del { color:var(--muted); }
+</style>
+</head>
+<body>
+<h1>Magic List</h1>
+<dl class="meta">
+  <dt>Date</dt><dd>2026-06-24</dd>
+  <dt>Status</dt><dd>enriched (brainstorm v1) — see decisions journal at the end</dd>
+</dl>
+
+<h2>Context</h2>
+<p>We use lists every day: shopping lists, holiday packing lists, task lists, toy lists, and so on.</p>
+<p>We use them in different contexts: planning the week's meals, preparing for holidays, the work to finish, etc.</p>
+<p>We use them on different timeframes: for today, for tomorrow's shopping, for the holidays in two weeks, etc.</p>
+<p>Sometimes we need lists we reuse several times, such as the list of things to take on holiday.</p>
+<p>Navigator's Magic Lists answer all these needs simply: lists that are <strong>replicable, shareable, checkable</strong>. They must be easy to reach and intuitive.</p>
+
+<h2>Data model</h2>
+<pre><code>pub struct MagicList {
+    pub id: i32,
+    pub name: String,
+    pub list_type: MagicListType,
+    pub owner_username: String,        // owner: the only one who administers the list
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+
+// Visibility, sharing and access rights are NOT carried by magic_list:
+// they belong to the cross-cutting mechanism (see sharing.html).
+// The magic_list table therefore only keeps owner_id; no family_id /
+// visibility / excluded_user_ids columns.
+
+pub enum MagicListType { Simple, Task, Template }
+
+pub struct MagicListItem {
+    pub id: i32,
+    pub magic_list_id: i32,
+    pub title: String,
+    pub content: Option&lt;String&gt;,        // OPTIONAL (see decision D2)
+    pub checked: bool,
+    pub due_date: Option&lt;NaiveDate&gt;,
+    pub status: Option&lt;MagicListItemStatus&gt;,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+
+pub enum MagicListItemStatus { Todo, InProgress, Done }</code></pre>
+<p><strong>JSON convention:</strong> the API exposes <strong>camelCase</strong> (<code>magicListType</code>, <code>dueDate</code>, <code>itemCount</code>, <code>createdAt</code>, <code>updatedAt</code>) to align with the front contract. Enums are serialized in <code>SCREAMING_SNAKE</code> (<code>SIMPLE</code>, <code>TASK</code>, <code>TEMPLATE</code>, <code>TODO</code>, <code>IN_PROGRESS</code>, <code>DONE</code>).</p>
+<p>The <strong>sharing</strong> fields (derived <code>visibility</code> <code>PERSONAL</code>/<code>SHARED</code>, <code>sharedWith</code> = <code>[{ userId, access }]</code>, the caller's effective <code>access</code>) are <strong>added to the view by the cross-cutting sharing layer</strong> (see <a href="sharing.html">sharing.html</a>), not by magic_list itself.</p>
+
+<h2>List types and the completion model</h2>
+<p>Two "done" mechanisms coexist — <code>checked</code> (boolean, shopping-list model) and <code>status</code> (TODO / IN_PROGRESS / DONE, task-board model). The list type decides which UI is presented:</p>
+<table>
+  <tr><th>Type</th><th>Usage</th><th><code>checked</code></th><th><code>status</code></th><th>Detail UI</th></tr>
+  <tr><td><strong>SIMPLE</strong></td><td>Notes / single-use reference list</td><td>unused</td><td>unused</td><td>flat items, no checkbox</td></tr>
+  <tr><td><strong>TASK</strong></td><td>Actionable list (checkable shopping items and/or status todos)</td><td>yes (checkbox)</td><td>optional</td><td>checkbox + status menu, grouping by status</td></tr>
+  <tr><td><strong>TEMPLATE</strong></td><td>Replicable model (see Templates section)</td><td>n/a (model)</td><td>n/a</td><td>model editing</td></tr>
+</table>
+<p><strong>Decision D1:</strong> we keep 3 types. <code>checked</code> and <code>status</code> may coexist on a TASK list. The checkbox is shown only for TASK; the status menu is offered on TASK items.</p>
+
+<h2>Managing a Magic List</h2>
+<h3>Creation</h3>
+<p>As a user, I create a magic list by specifying:</p>
+<ul>
+  <li>a <strong>name</strong>;</li>
+  <li>a <strong>type</strong> (SIMPLE / TASK / TEMPLATE).</li>
+</ul>
+<p>On creation the list is <strong>personal</strong> (no sharing). Sharing is a <strong>distinct action</strong> handled by the cross-cutting mechanism (see <a href="sharing.html">sharing.html</a>): the owner grants access per user; "share with the family" is a frontend convenience (one grant per member).</p>
+
+<h3>Modification</h3>
+<ul>
+  <li>Rename the list (owner only).</li>
+  <li><strong>Manage sharing</strong> (add/remove/change grants): an <strong>owner-only</strong> action that goes through the cross-cutting sharing endpoint, not through list editing.</li>
+</ul>
+
+<h3>Deletion</h3>
+<ul>
+  <li>Deleting a list deletes its items (cascade) <strong>and its sharing grants</strong> (explicit deletion, polymorphic registry — see <a href="sharing.html">sharing.html</a>).</li>
+  <li><strong>Deleting a TEMPLATE does NOT delete the lists generated from it</strong> (no hard link / FK cascade; see Templates).</li>
+</ul>
+
+<h2>List items</h2>
+<p>An item has a <strong>mandatory title</strong> and an <strong>optional content</strong> (decision D2). Additional optional fields: <code>dueDate</code>, <code>status</code>, <code>checked</code> (for TASK).</p>
+<p>Features:</p>
+<ul>
+  <li>Add an item.</li>
+  <li>Edit an item (title, content, dueDate, status, checked).</li>
+  <li>Delete an item.</li>
+  <li><strong>Clear "completed" items</strong>: bulk-delete the items considered completed.</li>
+</ul>
+<p><strong>Unified "completed" rule:</strong> an item is completed if <code>checked == true</code> <strong>or</strong> <code>status == DONE</code>. (Aligns the "Clear" button and the "Completed" grouping of the front, currently inconsistent: the mock filters on <code>status === DONE</code> alone.)</p>
+
+<h2>Templates (flagship feature — Phase 2)</h2>
+<p>A template is a TEMPLATE-type list serving as a reusable model.</p>
+<ul>
+  <li>From a template, <strong>generate an instance</strong> of type SIMPLE or TASK, with its own <strong>name</strong> and its own <strong>visibility</strong>.</li>
+  <li>Generation <strong>copies the template's items</strong>; on the instance, <code>checked</code> is reset to <code>false</code> and <code>status</code> is reset (or removed).</li>
+  <li>The instance is <strong>independent</strong>: no persistent link to the template. Editing/deleting the template does not affect already-generated instances.</li>
+</ul>
+
+<h2>Access &amp; sharing</h2>
+<p>The access/sharing <strong>mechanism</strong> is cross-cutting (see <a href="sharing.html">sharing.html</a>) — sharing per user, bitmask rights (<code>4</code> read / <code>6</code> write), resolution <code>owner → grant → nothing</code>. This section only describes its <strong>application to magic_list</strong>.</p>
+<ul>
+  <li>the <strong>owner</strong> always has full access to their lists <strong>and</strong> is the only one to <strong>administer</strong> them;</li>
+  <li>a non-owner accesses a list <strong>only if they have a grant</strong> on it; their right (<code>4</code> or <code>6</code>) is resolved by the cross-cutting layer;</li>
+  <li><strong>write (<code>6</code>)</strong> on a list = <strong>collaborate on the ITEMS</strong>: add / check / edit / delete items, clear completed;</li>
+  <li><strong>read-only (<code>4</code>)</strong> = view the list and its items, no modification;</li>
+  <li><strong>owner only:</strong> rename, manage sharing, delete the list, regenerate from a template.</li>
+</ul>
+
+<h2>Visualization</h2>
+<h3>Lists home page (summary)</h3>
+<ul>
+  <li>Card view: name, visibility badge, type (icon + label), <strong>item count</strong>.</li>
+  <li><strong>Filters:</strong> by type, by visibility, <strong>search by name</strong>.</li>
+  <li>Inline delete action (owner).</li>
+</ul>
+<p>Filters/search <strong>on the front side</strong> at first (low volume). Backend query params may be added later if needed.</p>
+
+<h3>List detail page</h3>
+<ul>
+  <li>Items adapted to the type (see list types table).</li>
+  <li>For TASK: <strong>grouping by status</strong> by default — "To do" / "In progress" / "Done".</li>
+  <li>Sorting possible by name / status / checked.</li>
+  <li><code>dueDate</code> shown (DD/MM/YYYY), <strong>highlighted as overdue</strong> if past due and item not completed.</li>
+</ul>
+
+<h2>Listed edge cases</h2>
+<ol>
+  <li><strong>Personal &amp; multi-family lists:</strong> a list with no grant is <strong>global to the owner</strong>, visible whatever the active family context (sharing is per user, not bound to a family — see <a href="sharing.html">sharing.html</a>).</li>
+  <li><strong>SHARED → PERSONAL transition:</strong> = <strong>remove all grants</strong>; the list disappears from other users' views.</li>
+  <li><strong>Owner / member leaves the family:</strong> without a membership check, existing grants <strong>remain valid</strong> until the owner revokes them (see cross-cutting edge cases).</li>
+  <li><strong>Member without a grant:</strong> does not see the list in the summary; <strong>404</strong> on direct access (we do not reveal existence).</li>
+  <li><strong>Manual reordering:</strong> no <code>position</code> column today → drag &amp; drop not supported in phase 1 (sort by name/status/checked only). To add (a <code>position</code> column) if needed later.</li>
+  <li><strong><code>dueDate</code> &amp; timezone:</strong> "overdue" comparison against the local date of the day.</li>
+  <li><strong>Template deletion:</strong> does not break instances (no FK).</li>
+</ol>
+
+<h2>Implementation strategy</h2>
+<p><strong>Contract reference:</strong> React front + Fastify mock (camelCase, response = full list after every item mutation, <code>createdAt</code>/<code>updatedAt</code> everywhere). The Rust back aligns to it.</p>
+
+<h3>Phase 1 — CRUD &amp; access parity (Rust back ↔ front)</h3>
+<p>The back must catch up to the routes the front already expects. Endpoints to add:</p>
+<table>
+  <tr><th>Method</th><th>Route</th><th>To do</th></tr>
+  <tr><td><code>GET</code></td><td><code>/families/{familyId}/magic-lists/{id}</code></td><td>new: detail + items (+ sharing block from the cross-cutting layer)</td></tr>
+  <tr><td><code>PUT</code></td><td><code>/families/{familyId}/magic-lists/{id}</code></td><td>new: <strong>rename</strong> (owner) — no visibility/exclusions here anymore</td></tr>
+  <tr><td><code>PUT</code></td><td><code>/families/{familyId}/magic-lists/{id}/shares</code></td><td>new: <strong>manage grants</strong> (owner-only) — delegates to cross-cutting sharing</td></tr>
+  <tr><td><code>DELETE</code></td><td><code>/families/{familyId}/magic-lists/{id}</code></td><td>new (deletes items + grants)</td></tr>
+  <tr><td><code>DELETE</code></td><td><code>/families/{familyId}/magic-lists/{id}/items/{itemId}</code></td><td>new (response = full list)</td></tr>
+  <tr><td><code>DELETE</code></td><td><code>/families/{familyId}/magic-lists/{id}/items/completed</code></td><td>new (unified "completed" rule)</td></tr>
+</table>
+<p>Note: the <code>/families/{familyId}/</code> prefix comes from the initial front contract but <strong>no longer fits</strong> the model (sharing is per user, not family-scoped). To reconfirm with the front: either keep it as a mere display context, or switch to <code>/magic-lists/{id}</code>. Out of brainstorm scope.</p>
+<p>Domain-cross-cutting work:</p>
+<ul>
+  <li>Serialize <code>createdAt</code> / <code>updatedAt</code> in the views (list, summary, items).</li>
+  <li><strong>camelCase</strong> convention on all input/output DTOs (<code>#[serde(rename_all = "camelCase")]</code>).</li>
+  <li>Item mutations return the <strong>full MagicList</strong> (front alignment).</li>
+  <li>Wire the <strong>cross-cutting sharing</strong>: <code>check_magic_list_access</code> delegates to the cross-cutting access resolution; add the sharing block (<code>visibility</code>/<code>sharedWith</code>/<code>access</code>) to the views.</li>
+  <li>Apply rights (write <code>6</code> ⇒ items; owner ⇒ list admin — see Access &amp; sharing section).</li>
+</ul>
+
+<h3>Phase 2 — Templates</h3>
+<ul>
+  <li>Generation endpoint: <code>POST /families/{familyId}/magic-lists/{templateId}/generate</code> (payload: <code>name</code>, target <code>type</code> SIMPLE|TASK). The generated instance is <strong>personal</strong>; sharing is then done via the (cross-cutting) sharing endpoint.</li>
+  <li>Generate the list from the template: load the template + its items, create a new independent list, copy the items resetting <code>checked</code>/<code>status</code>.</li>
+  <li>No FK constraint template→instance.</li>
+  <li>Add the front UI (the mock and the front do not have it yet → the contract is to be created, not aligned).</li>
+</ul>
+
+<h2>Decisions journal (revisable)</h2>
+<ul>
+  <li><strong>D1</strong> — 3 types kept; <code>checked</code> and <code>status</code> coexist on TASK; checkbox shown for TASK only.</li>
+  <li><strong>D2</strong> — Item content <strong>optional</strong> (title alone mandatory). Corrects the initial spec.</li>
+  <li><strong>D3</strong> — Shared list: <strong>write (<code>6</code>) = collaborative on items</strong>, <strong>admin (rename/sharing/deletion) reserved to the owner</strong>. (Now expressed via the cross-cutting bitmask — see <a href="sharing.html">sharing.html</a>.)</li>
+  <li><strong>D4</strong> — Templates handled in <strong>Phase 2</strong> (after CRUD parity).</li>
+  <li><del><strong>D5</strong> — <code>excludedMemberIds</code> applied in access control.</del> <strong>Obsolete:</strong> <code>excludedMemberIds</code>/<code>familyId</code>/<code>visibility</code> no longer exist on magic_list; sharing is <strong>per user</strong> via the cross-cutting mechanism (<a href="sharing.html">sharing.html</a>). Exclude = do not create a grant.</li>
+  <li><strong>"Completed" rule</strong> = <code>checked || status == DONE</code> (unifies clearing + grouping).</li>
+  <li><strong>Filters/search/sort</strong> on the <strong>front</strong> in phase 1.</li>
+</ul>
+</body>
+</html>

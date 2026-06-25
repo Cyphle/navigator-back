@@ -24,11 +24,149 @@
 <body>
 <h1>Recipes &amp; planned meals</h1>
 <dl class="meta">
-  <dt>Date</dt><dd>2026-06-24</dd>
-  <dt>Status</dt><dd>empty — to be defined</dd>
+  <dt>Date</dt><dd>2026-06-25</dd>
+  <dt>Status</dt><dd>draft — brainstorm done, ready for implementation strategy</dd>
+  <dt>Theme</dt><dd>#5 recipes &amp; planned meals (front real / back stub)</dd>
 </dl>
 
 <h2>Context</h2>
-<p>To be defined.</p>
+<p>Two linked domains. <strong>Recipes</strong> is a personal/shared cookbook. <strong>Meal selection</strong> lets the user pick recipes and place them on days to plan what to cook over the coming days, then turn that into a shopping list.</p>
+<p>The brainstorm was driven by the real usage: "I pick recipes for the next week or two, I say <em>this dish is for Monday and Tuesday</em>, and from the selected recipes I build a shopping list." State of the code: the <strong>front</strong> is real (recipe browsing, rating, meals lists CRUD, summaries); the <strong>back</strong> is a stub. The front contract is the reference; deltas decided here are listed in their own section.</p>
+
+<h2>Ownership &amp; sharing</h2>
+<p>A recipe and a meal selection are <strong>user-owned</strong> (decision R1). The front <code>visibility</code>/<code>familyId</code> notions are removed; access beyond the owner is delegated to the cross-cutting sharing mechanism (see <a href="sharing.html">sharing.html</a>). Invisible → 404, visible without write right → 403. The <code>families/{familyId}</code> path segment is a front grouping.</p>
+
+<h2>Recipes — the cookbook</h2>
+<p>A recipe captures what to cook and how. The user creates, edits, deletes recipes (full CRUD, decision R5) and browses the catalogue with search, category filter, minimum rating and sort (paginated, from the front contract).</p>
+<ul>
+  <li><strong>Identity</strong>: name, <strong>category</strong> (ENTREE / PLAT / DESSERT / SAUCE / APERO), a <strong>presentation image</strong>.</li>
+  <li><strong>Ingredients</strong>: a structured list — each is <code>{ quantity?, unit?, name }</code> (decision R3). The structure is what makes the shopping list summable. Free wording stays possible by leaving quantity/unit empty (e.g. "a bit of salt").</li>
+  <li><strong>Steps</strong>: an ordered list of preparation steps; <strong>each step can carry an image</strong> (decision R2). No "parts" split — a recipe is flat (ingredients + steps).</li>
+  <li><strong>Rating</strong>: a <strong>single shared value</strong> per recipe (decision R6); anyone with access sees and changes it.</li>
+  <li><strong>Favorite</strong>: <strong>per member</strong> (decision R6) — my own shortlist, independent of others'.</li>
+  <li><strong>Images</strong>: uploaded through the back; the physical storage backend is abstracted (decision R4) and out of functional scope. A recipe/step holds an opaque image reference.</li>
+</ul>
+
+<h2>Meal selection — planning</h2>
+<p>From the cookbook the user clicks <strong>"start a selection"</strong> and builds a working set of recipes, positioning each on days (decision R7).</p>
+<ul>
+  <li>A selection is a set of <strong>placements</strong> <code>(recipe → day)</code>. A recipe may be placed on <strong>several days</strong> ("this dish is for Monday and Tuesday").</li>
+  <li><strong>No frozen period</strong>: a selection has no fixed start/end. The user keeps positioning recipes freely. Any displayed range is derived from the earliest/latest placed day.</li>
+  <li>No lunch/dinner slot, no per-person targeting — a meal is a family meal, reasoned by day.</li>
+  <li>Full CRUD on a selection; user-owned and shareable.</li>
+</ul>
+
+<h2>Shopping list — bridge to Magic List</h2>
+<p>From a selection the user clicks <strong>"validate"</strong> and the app creates a checkable <strong>Magic List</strong> (decision R8, see <a href="magic-list.html">magic-list.html</a>).</p>
+<ul>
+  <li><strong>Aggregation</strong>: same ingredient + same unit → summed into one line (200 g + 200 g = 400 g flour).</li>
+  <li><strong>Unit conflict</strong>: same ingredient, different units → <strong>one line flagged "to check"</strong>, the heterogeneous quantities listed in its comment ("200 g + 3 spoons + 2 ladles"). The user fixes the quantity manually and confirms to clear the flag.</li>
+  <li><strong>Source link</strong>: the generated list <strong>remembers the recipes that fed it</strong>. Removing a recipe triggers a <strong>best-effort subtraction</strong> of its quantities: compatible unit → subtracted; incompatible unit → left untouched. No guarantee — pragmatic by design.</li>
+  <li><strong>Free adjustment</strong>: the user adds, edits and deletes items at will (it is a normal Magic List).</li>
+</ul>
+
+<h2>Dashboard</h2>
+<p>The dashboard shows the calendar and, alongside, the <strong>recipes positioned on the currently visible days</strong>. There is <strong>no "selected this week" marker</strong> (decision R9) — what shows is simply the placements falling in the visible window. The exact window is a dashboard concern (theme #6), consistent with the calendar agenda.</p>
+
+<h2>Data model</h2>
+<p>Only the database model is treated as technical here.</p>
+<pre><code>pub struct Recipe {
+    pub id: i32,
+    pub owner_username: String,
+    pub name: String,
+    pub category: RecipeCategory,
+    pub image_ref: Option&lt;String&gt;,     // opaque reference; storage abstracted (R4)
+    pub rating: Option&lt;i32&gt;,            // single shared value (R6)
+    pub ingredients: Vec&lt;RecipeIngredient&gt;,
+    pub steps: Vec&lt;RecipeStep&gt;,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+
+pub struct RecipeIngredient {          // structured (R3)
+    pub id: i32,
+    pub recipe_id: i32,
+    pub quantity: Option&lt;BigDecimal&gt;,
+    pub unit: Option&lt;String&gt;,
+    pub name: String,
+    pub position: i32,
+}
+
+pub struct RecipeStep {
+    pub id: i32,
+    pub recipe_id: i32,
+    pub position: i32,
+    pub text: String,
+    pub image_ref: Option&lt;String&gt;,     // per-step image (R2)
+}
+
+pub enum RecipeCategory { Entree, Plat, Dessert, Sauce, Apero }
+
+// recipe_favorites { recipe_id, username }   // favorite per member (R6)
+
+pub struct MealSelection {             // no frozen period (R7)
+    pub id: i32,
+    pub owner_username: String,
+    pub name: Option&lt;String&gt;,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+    pub entries: Vec&lt;MealSelectionEntry&gt;,
+}
+
+pub struct MealSelectionEntry {        // one row per covered day
+    pub id: i32,
+    pub meal_selection_id: i32,
+    pub recipe_id: i32,
+    pub day: NaiveDate,
+}
+
+// shopping_list_links { magic_list_id, meal_selection_id, recipe_id }
+//   links a generated Magic List to its selection + source recipes,
+//   enabling best-effort quantity subtraction on recipe removal (R8)</code></pre>
+<p><strong>Tables:</strong> <code>recipes</code>, <code>recipe_ingredients</code>, <code>recipe_steps</code>, <code>recipe_favorites</code>, <code>meal_selections</code>, <code>meal_selection_entries</code>, <code>shopping_list_links</code>. The shopping list itself is a regular Magic List (its own domain). Sharing reuses the cross-cutting <code>shares</code> table — no family/visibility column.</p>
+<p><strong>JSON convention:</strong> camelCase (<code>imageUrl</code>, <code>ownerUsername</code>, <code>createdAt</code>, <code>updatedAt</code>); enums in <code>SCREAMING_SNAKE</code> (<code>ENTREE</code>, <code>PLAT</code>, …). Mutations return the full aggregate (recipe, or meal selection).</p>
+
+<h2>API contract — front deltas</h2>
+<table>
+  <tr><th>Area</th><th>Front today</th><th>Decided</th></tr>
+  <tr><td>Recipe body</td><td><code>parts[]</code> + flat ingredients/steps as strings</td><td><code>parts[]</code> removed; flat only; steps become <code>{ text, imageUrl? }</code> (R2)</td></tr>
+  <tr><td>Ingredients</td><td><code>string[]</code></td><td>structured <code>{ quantity?, unit?, name }</code> (R3)</td></tr>
+  <tr><td>Recipe writes</td><td>delete + rating only</td><td>full CRUD added (R5)</td></tr>
+  <tr><td>Favorite</td><td>flag on dashboard recipe</td><td>per-member favorite (R6)</td></tr>
+  <tr><td>Meal list period</td><td><code>startDate</code>/<code>endDate</code></td><td>removed — no frozen period; placements <code>(recipe, day)</code> (R7)</td></tr>
+  <tr><td>Meal recipe</td><td><code>assignedDays[]</code></td><td>one placement row per covered day (R7)</td></tr>
+  <tr><td>Shopping list</td><td>not modelled</td><td>"validate" generates a linked Magic List with aggregation (R8)</td></tr>
+  <tr><td>Dashboard</td><td><code>selectedForWeek</code></td><td>removed; dashboard shows placements on visible days (R9)</td></tr>
+</table>
+<p>The front will follow these deltas.</p>
+
+<h2>Errors &amp; HTTP codes</h2>
+<p>Project common principle, standard web codes: <strong>404</strong> absent/invisible recipe or selection, <strong>403</strong> visible without the required right, <strong>400</strong> invalid input (empty name, bad category, malformed ingredient/step, day not a valid date).</p>
+
+<h2>Listed edge cases</h2>
+<ul>
+  <li><strong>Ingredient with no quantity/unit</strong> ("a bit of salt") → allowed; never summed, listed as-is.</li>
+  <li><strong>Same ingredient, same unit, across recipes</strong> → summed into one shopping line (R8).</li>
+  <li><strong>Same ingredient, different units</strong> → one flagged line with the detail in its comment; user fixes and clears the flag (R8).</li>
+  <li><strong>Removing a recipe from a generated list, incompatible unit</strong> → quantity left untouched, best-effort (R8).</li>
+  <li><strong>Recipe placed on several days</strong> → one entry per day; counts once per day in the meal display.</li>
+  <li><strong>Deleting a recipe still referenced by a selection</strong> → to define at implementation (keep the placement name vs cascade); functionally the placement should not crash the selection view.</li>
+</ul>
+
+<h2>Open points</h2>
+<p>None.</p>
+
+<h2>Decisions journal (revisable)</h2>
+<ul>
+  <li><strong>R1</strong> — Recipe and meal selection are user-owned; sharing is cross-cutting.</li>
+  <li><strong>R2</strong> — Recipe is flat (ingredients + steps), no <code>parts[]</code>; each step can carry an image; recipe has a presentation image.</li>
+  <li><strong>R3</strong> — Ingredients are structured <code>{ quantity?, unit?, name }</code> (enables shopping-list summation).</li>
+  <li><strong>R4</strong> — Images are uploaded through the back; storage backend is abstracted (opaque reference); out of functional scope.</li>
+  <li><strong>R5</strong> — Full CRUD on recipes.</li>
+  <li><strong>R6</strong> — Rating is a single shared value per recipe; favorite is per member.</li>
+  <li><strong>R7</strong> — Meal selection started from the cookbook; placements <code>(recipe → day)</code>, a recipe may cover several days; <strong>no frozen period</strong>; no slot, no per-person.</li>
+  <li><strong>R8</strong> — "Validate" generates a checkable Magic List: same-unit ingredients summed; different units flagged "to check" with detail; list keeps a link to source recipes; removing a recipe subtracts best-effort (compatible unit only); free add/edit/delete.</li>
+  <li><strong>R9</strong> — No <code>selectedForWeek</code> marker; the dashboard shows recipes positioned on the visible days.</li>
+</ul>
 </body>
 </html>

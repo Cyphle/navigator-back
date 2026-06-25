@@ -13,6 +13,16 @@ A report captures the state or the synthesis of a brainstorm. It is written in *
 1. **Brainstorm synthesis / status report** — `specs/reports/YYYY-MM-DD-<topic>.html`.
 2. **Functional spec conversion** — translate an existing `specs/functional/*.md` (French) into `specs/functional/*.html` (English), same surgical style, preserving every decision, table, data model, and edge case. The decisions journal at the end of each spec must be carried over faithfully.
 
+## Conducting the brainstorm (non-negotiable)
+
+The brainstorm that precedes any report is **use-case first**. Always:
+
+- Start from **usage**: who does what, in what situation, to what end. Make the user describe the behaviour they want, ideally with a concrete scenario (real people, real dates).
+- **Never** ask shortened design/technical questions — banned framings include "stored vs derived", "granularity", "periodicity", "flag vs computed", and any option list phrased in implementation terms. They short-circuit the usage discussion and confuse the user.
+- Phrase questions as scenarios or plain "what do you want to happen?" prompts. One question at a time.
+- The **data model comes after**, and only if it falls out naturally from the agreed use cases — present it as a consequence to validate, never as the entry point.
+- Consider the `product-owner` agent to frame use cases when a domain is broad.
+
 ## Scope rules (non-negotiable)
 
 Same as the project's brainstorm rules:

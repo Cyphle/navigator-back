@@ -26,7 +26,7 @@ Pour chaque thème (= 1 fichier `specs/functional/*.md`) :
 | 2 | transverse_partage | mince | (transverse) | (transverse) | ✅ terminé |
 | 3 | calendrier | mince | stub | réel | ✅ terminé |
 | 4 | comptes_bancaire | vide | lecture seule | réel | ✅ terminé |
-| 5 | recettes_repas_previsionnels | vide | stub | réel | ⚪ à faire |
+| 5 | recettes_repas_previsionnels | vide | stub | réel | ✅ terminé |
 | 6 | dashboard | vide | stub | réel | ⚪ à faire |
 | 7 | configuration (familles + profil) | squelette | partiel | partiel | ⚪ à faire |
 
@@ -34,13 +34,15 @@ Légende : ⚪ à faire · 🔵 en cours · ✅ terminé
 
 ## Où on s'est arrêté (curseur)
 
-**Thème terminé : comptes_bancaire (#4) — brainstorm bouclé.**
-- Résultats → **`functional/bank-account.html`** (décisions B1→B8, modèle de données 8 tables, montants versionnés, formules de calcul mensuel).
-- Décisions structurantes : **B1** compte user-owned + `shares` (retrait visibility/familyId, suppression enum Visibility) ; **B2** actual = débité (debitDate≤today), remaining/forecast = pire cas fin de mois (budgets réservés à 100%) ; **B3** budget périodicité MONTHLY(mois civil)/YEARLY(année civile)/ONE_SHOT + **montant versionné** (modif = sa période + suivantes, jamais passé) ; **B4** charges = même versioning ; **B5** crédits ponctuels seulement ; **B6** CRUD complet ; **B7** rattachement au mois par `expenseDate`, split actual/forecast par `debitDate` ; **B8** delete d'un récurrent = arrêt à partir d'une date (passé conservé).
-- Modèle DB : `bank_accounts`, `charges`+`charge_amounts`, `budgets`+`budget_amounts`, `budget_expenses`, `credits`, `expenses` ; accès délégué à `shares`. Charge = récurrente seulement (ponctuel = Expense). `endOfMonthForecast`=`remainingAmount`.
-- **Reprendre à** : prochain thème — #5 **recettes_repas_previsionnels** ou #6 **dashboard** (les 2 points ouverts du dashboard dépendent de #6).
+**Thème terminé : recettes_repas_previsionnels (#5) — brainstorm bouclé.**
+- Résultats → **`functional/recipes-meals.html`** (décisions R1→R9, modèle 7 tables, pont liste de courses → Magic List).
+- ⚠️ **Méthodo (retour user du 25/06)** : brainstorm = **use cases d'abord**, pas de questions techniques raccourcies (stocké vs dérivé, granularité…). Voir mémoire `brainstorm-use-case-first`.
+- Décisions structurantes : **R1** recette+sélection user-owned + `shares` ; **R2** recette plate (ingredients+steps, pas de parts), steps avec image, image de présentation ; **R3** ingrédient structuré `{quantity?, unit?, name}` ; **R4** upload géré par le back, stockage abstrait ; **R5** CRUD complet recettes ; **R6** note partagée + favori par membre ; **R7** sélection de repas SANS période figée, placements `(recette→jour)`, un plat peut couvrir plusieurs jours ; **R8** « valider » → Magic List cochable, ingrédients regroupés (même unité=somme ; unités ≠ = ligne marquée « à vérifier »), lien vers recettes sources, retrait best-effort ; **R9** pas de `selectedForWeek`, dashboard montre les recettes posées sur les jours visibles.
+- Modèle DB : `recipes`, `recipe_ingredients`, `recipe_steps`, `recipe_favorites`, `meal_selections`, `meal_selection_entries`, `shopping_list_links`. La liste de courses est une Magic List normale.
+- **Reprendre à** : prochain thème — #6 **dashboard** (agrège agenda/calendrier + repas + comptes + magic_list) ou #7 **configuration**.
 
 ### Historique
+- **#4 comptes_bancaire** ✅ → `functional/bank-account.html`. Décisions B1→B8. Compte user-owned, montants versionnés (budgets+charges), 2 dates (expenseDate→mois, debitDate→actual/forecast), CRUD complet, delete récurrent = arrêt daté.
 - **#3 calendrier** ✅ → `functional/calendar.html`. Décisions C1→C7. Calendrier user-owned, all-day+endDate, récurrence simple, invité=membre, kind EVENT/TASK, agenda fenêtre j→j+7.
 - **#2 transverse_partage** ✅ → `functional/sharing.html`. Partage **PAR USER**, table `shares` unique, « partager à une famille » = front. Décisions T1→T9.
 - **#1 magic_list** ✅ → `functional/magic-list.html`. Amendé pour cohérence partage par user (D5 obsolète).

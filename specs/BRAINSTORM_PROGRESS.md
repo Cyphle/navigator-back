@@ -23,9 +23,9 @@ Pour chaque thème (= 1 fichier `specs/functional/*.md`) :
 | # | Thème (fichier) | Spec init | Back Rust | Front React | Brainstorm |
 |---|-----------------|-----------|-----------|-------------|------------|
 | 1 | magic_list | bonne | réel | réel | ✅ terminé |
-| 2 | transverse_partage | mince | (transverse) | (transverse) | 🔵 EN COURS |
-| 3 | calendrier | mince | stub | réel | ⚪ à faire |
-| 4 | comptes_bancaire | vide | lecture seule | réel | ⚪ à faire |
+| 2 | transverse_partage | mince | (transverse) | (transverse) | ✅ terminé |
+| 3 | calendrier | mince | stub | réel | ✅ terminé |
+| 4 | comptes_bancaire | vide | lecture seule | réel | ✅ terminé |
 | 5 | recettes_repas_previsionnels | vide | stub | réel | ⚪ à faire |
 | 6 | dashboard | vide | stub | réel | ⚪ à faire |
 | 7 | configuration (familles + profil) | squelette | partiel | partiel | ⚪ à faire |
@@ -34,14 +34,18 @@ Légende : ⚪ à faire · 🔵 en cours · ✅ terminé
 
 ## Où on s'est arrêté (curseur)
 
-**Thème actif : transverse_partage (#2) — brainstorm EN COURS.**
-- Résultats du brainstorm partage → **`functional/transverse_partage.md`** (spec dédiée, décisions T1→T9, exemple magic_list, modèle de données, archi).
-- Décision structurante : **le partage est PAR USER**. « Partager à une famille » = truc du front (expansion en N grants + regroupement d'affichage). Le back ne connaît pas les familles dans le partage ⇒ **une seule table `shares`** de grants. Modèle radicalement simplifié.
-- **Brainstorm partage bouclé** : modèle fonctionnel + modèle de données (1 table) + principe erreurs/HTTP (= principe projet, codes web standards). Décisions T1→T9 figées dans `transverse_partage.md`.
-- **Cadre méthodo (important)** : dans le brainstorm on ne discute PAS d'architecture logicielle (placement modules, couches) → ça relève des *rules* d'archi clean/hexagonale. Seule notion technique discutée : le **modèle de base de données**.
-- ✅ `magic_list.md` amendé pour cohérence avec le modèle de partage par user (struct sans visibility/family/excluded, accès délégué au transverse, D5 marqué obsolète, routes ajustées).
-- **Reprendre à** : prochain thème — #3 **calendrier** (front réel / back stub).
-- ⚠️ La section « Accès & partage » de `magic_list.md` est **supersédée** par `transverse_partage.md` → à amender quand le modèle est figé.
+**Thème terminé : comptes_bancaire (#4) — brainstorm bouclé.**
+- Résultats → **`functional/bank-account.html`** (décisions B1→B8, modèle de données 8 tables, montants versionnés, formules de calcul mensuel).
+- Décisions structurantes : **B1** compte user-owned + `shares` (retrait visibility/familyId, suppression enum Visibility) ; **B2** actual = débité (debitDate≤today), remaining/forecast = pire cas fin de mois (budgets réservés à 100%) ; **B3** budget périodicité MONTHLY(mois civil)/YEARLY(année civile)/ONE_SHOT + **montant versionné** (modif = sa période + suivantes, jamais passé) ; **B4** charges = même versioning ; **B5** crédits ponctuels seulement ; **B6** CRUD complet ; **B7** rattachement au mois par `expenseDate`, split actual/forecast par `debitDate` ; **B8** delete d'un récurrent = arrêt à partir d'une date (passé conservé).
+- Modèle DB : `bank_accounts`, `charges`+`charge_amounts`, `budgets`+`budget_amounts`, `budget_expenses`, `credits`, `expenses` ; accès délégué à `shares`. Charge = récurrente seulement (ponctuel = Expense). `endOfMonthForecast`=`remainingAmount`.
+- **Reprendre à** : prochain thème — #5 **recettes_repas_previsionnels** ou #6 **dashboard** (les 2 points ouverts du dashboard dépendent de #6).
+
+### Historique
+- **#3 calendrier** ✅ → `functional/calendar.html`. Décisions C1→C7. Calendrier user-owned, all-day+endDate, récurrence simple, invité=membre, kind EVENT/TASK, agenda fenêtre j→j+7.
+- **#2 transverse_partage** ✅ → `functional/sharing.html`. Partage **PAR USER**, table `shares` unique, « partager à une famille » = front. Décisions T1→T9.
+- **#1 magic_list** ✅ → `functional/magic-list.html`. Amendé pour cohérence partage par user (D5 obsolète).
+- **Cadre méthodo (important)** : en brainstorm on ne discute PAS d'archi logicielle (couches, modules) ; seule notion technique = le **modèle de base de données** ; erreurs = principe projet (codes web standards).
+- ⚠️ La section « Accès & partage » de magic_list est supersédée par `sharing.html`.
 
 ## Journal des décisions transverses
 

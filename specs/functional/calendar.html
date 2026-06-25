@@ -25,14 +25,165 @@
 <h1>Calendar</h1>
 <dl class="meta">
   <dt>Date</dt><dd>2026-06-24</dd>
-  <dt>Status</dt><dd>draft — brainstorm not started</dd>
+  <dt>Status</dt><dd>draft — brainstorm done, ready for implementation strategy</dd>
+  <dt>Theme</dt><dd>#3 calendar (front real / back stub)</dd>
 </dl>
 
 <h2>Context</h2>
-<p>In my family and personal life, time-bound items come up: holidays, birthdays, reminders, and so on. These events may concern one or several people.</p>
-<p>Note: I already use other calendar applications such as Google Calendar.</p>
+<p>In family and personal life, time-bound items come up: holidays, birthdays, reminders, recurring chores. These items may concern one person, several members, or the whole family.</p>
+<p>The general need: record <strong>events</strong> and <strong>tasks to do</strong>, get a <strong>view over time</strong> (agenda), and later get reminders. Google Calendar is used elsewhere; external sync is out of scope here.</p>
+<p>State of the code: the <strong>front</strong> is real (full CRUD on calendars and nested events, plus an agenda summary). The <strong>back</strong> is a stub: only <code>GET /families/{familyId}/calendars/summary</code> exists and returns <code>[]</code>. The front contract is the reference; deltas decided here are listed in their own section.</p>
 
-<h2>General need</h2>
-<p>I want to record events or tasks to do. I want a view of these items over time and to get reminders. These items may concern me personally, but also other family members or the whole family, such as holidays or birthdays.</p>
+<h2>Data model</h2>
+<p>Only the database model is treated as technical here. A calendar is <strong>user-owned</strong>; access beyond the owner is delegated entirely to the cross-cutting sharing mechanism. No <code>type</code> / <code>family_id</code> / <code>visibility</code> columns (decision C1).</p>
+<pre><code>pub struct Calendar {
+    pub id: i32,
+    pub name: String,
+    pub color: String,
+    pub owner_username: String,        // owner: the only one who administers the calendar
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+// Sharing / access rights are NOT carried by calendar:
+// they belong to the cross-cutting mechanism (see sharing.html).
+
+pub struct CalendarEvent {
+    pub id: i32,
+    pub calendar_id: i32,
+    pub kind: EventKind,                       // EVENT or TASK
+    pub title: String,
+    pub description: Option&lt;String&gt;,
+    pub date: NaiveDate,                        // start day
+    pub end_date: Option&lt;NaiveDate&gt;,           // multi-day span; implies all_day
+    pub all_day: bool,
+    pub time: Option&lt;NaiveTime&gt;,               // only when !all_day
+    pub duration: Option&lt;i32&gt;,                 // minutes, only when !all_day
+    pub recurrence: RecurrenceType,
+    pub done: bool,                            // meaningful only when kind == TASK
+    pub reminder_minutes_before: Option&lt;i32&gt;,  // stored/exposed, NOT triggered yet
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+
+pub enum EventKind { Event, Task }
+
+pub enum RecurrenceType { None, Daily, Weekly, Monthly, Yearly }
+
+// Invitees: one row per invited member (join table).
+// calendar_event_invites { event_id: i32, member_username: String }</code></pre>
+<p><strong>JSON convention:</strong> the API exposes <strong>camelCase</strong> (<code>calendarId</code>, <code>endDate</code>, <code>allDay</code>, <code>reminderMinutesBefore</code>, <code>createdAt</code>, <code>updatedAt</code>). Enums serialize in <code>SCREAMING_SNAKE</code> (<code>EVENT</code>, <code>TASK</code>, <code>NONE</code>, <code>DAILY</code>, <code>WEEKLY</code>, <code>MONTHLY</code>, <code>YEARLY</code>). <code>invites</code> is exposed as an array of member usernames. Mutations return the full <strong>Calendar</strong> aggregate.</p>
+
+<h2>Event temporal model</h2>
+<p>Three valid shapes (decision C2):</p>
+<table>
+  <tr><th>Shape</th><th><code>allDay</code></th><th><code>time</code> / <code>duration</code></th><th><code>endDate</code></th><th>Use</th></tr>
+  <tr><td><strong>Timed</strong></td><td>false</td><td>required</td><td>none</td><td>Single-day, at a time (dentist 10:00, gym 18:00)</td></tr>
+  <tr><td><strong>All-day, single</strong></td><td>true</td><td>null (ignored)</td><td>none</td><td>Birthday, public holiday</td></tr>
+  <tr><td><strong>All-day, multi</strong></td><td>true</td><td>null (ignored)</td><td>set</td><td>Holidays over [date, endDate]</td></tr>
+</table>
+<p>Rules: a timed event is <strong>mono-day</strong> (no <code>endDate</code>). <code>endDate</code> implies <code>allDay = true</code> and must satisfy <code>endDate &ge; date</code>. When <code>allDay = true</code>, <code>time</code>/<code>duration</code> are null and ignored.</p>
+
+<h2>Events and tasks</h2>
+<p>An item is either an <strong>event</strong> (a moment in time) or a <strong>task</strong> (something to do by a date), distinguished by <code>kind</code> (decision C5). This intentionally overlaps a little with magic_list.</p>
+<ul>
+  <li><code>done</code> is meaningful <strong>only when <code>kind == TASK</code></strong> (default <code>false</code>); checking a task off does not delete it.</li>
+  <li>A task carries a <strong>due date</strong> (<code>date</code>); <code>time</code> is optional and it may be <code>allDay</code>; a task may recur (recurring chore).</li>
+  <li>For an <code>EVENT</code>, <code>done</code> stays <code>false</code> and is not surfaced.</li>
+</ul>
+
+<h2>Recurrence</h2>
+<p>Recurrence is a <strong>simple infinite rule</strong> (decision C3): <code>NONE | DAILY | WEEKLY | MONTHLY | YEARLY</code>. No end date, no per-occurrence exception. A recurring item is stored as <strong>one row</strong> plus its rule; occurrences are <strong>expanded by the back within the agenda window</strong>. Editing or deleting the item affects the <strong>whole series</strong> (no "this occurrence only"). Covers birthdays (YEARLY), recurring chores, weekly gym.</p>
+
+<h2>Invitees / participants</h2>
+<p>An invitee is a <strong>family member</strong>, identified by username (decision C4). Inviting is a label of who is concerned <strong>and</strong> a routing rule for the agenda:</p>
+<ul>
+  <li>Being invited makes the event appear in the invitee's <strong>agenda</strong>, <strong>even without any share</strong> on the owning calendar.</li>
+  <li>Invitation does <strong>not</strong> grant calendar access: opening the full owning calendar still requires a <code>share</code>.</li>
+  <li>"Invite the whole family" is a <strong>frontend convenience</strong> (expanded to one username per member), mirroring the sharing model.</li>
+</ul>
+
+<h2>Managing a calendar</h2>
+<h3>Creation</h3>
+<p>A user creates a calendar with a <strong>name</strong> and a <strong>color</strong>. On creation it is personal (no sharing). A user may own <strong>several</strong> calendars.</p>
+<h3>Modification</h3>
+<ul>
+  <li>Rename / recolor the calendar (owner only).</li>
+  <li><strong>Manage sharing</strong> (add/remove/change grants): owner-only, through the cross-cutting sharing endpoint, not through calendar editing (see <a href="sharing.html">sharing.html</a>).</li>
+</ul>
+<h3>Deletion</h3>
+<ul>
+  <li>Deleting a calendar deletes its events (cascade) and its sharing grants (cross-cutting registry — see <a href="sharing.html">sharing.html</a>).</li>
+</ul>
+
+<h2>Events (CRUD)</h2>
+<ul>
+  <li>Add an event/task to a calendar.</li>
+  <li>Edit an event/task (any field, including <code>invites</code> and <code>done</code>).</li>
+  <li>Delete an event/task (deletes its invite rows in cascade).</li>
+</ul>
+<p>Every event mutation returns the full <strong>Calendar</strong> aggregate (project convention).</p>
+
+<h2>Access &amp; sharing</h2>
+<p>Access is delegated to the cross-cutting mechanism (<a href="sharing.html">sharing.html</a>): the <strong>owner</strong> has full rights; other users see/edit a calendar only through a matching <code>share</code> grant (Linux-style bitmask). There is no calendar-specific access table.</p>
+<ul>
+  <li>A calendar with no matching share is <strong>invisible</strong> (404 on access).</li>
+  <li>A visible calendar without write rights → 403 on mutation.</li>
+  <li>Being an event invitee is independent of calendar access (see Invitees).</li>
+</ul>
+
+<h2>Agenda view (summary)</h2>
+<p>The core need — "a view of these items over time" — is served by the agenda summary (decision C7):</p>
+<ul>
+  <li>Endpoint <code>GET /families/{familyId}/calendars/summary?from=&amp;to=</code>.</li>
+  <li>Aggregates, <strong>flattened</strong>, the events of <strong>all calendars the user can see</strong> (owned + shared) <strong>plus</strong> events where the user is an <strong>invitee</strong> (even without calendar access).</li>
+  <li>Recurring items are <strong>expanded into occurrences</strong> falling within <code>[from, to]</code>.</li>
+  <li><strong>Default window</strong>: if <code>from</code>/<code>to</code> are omitted, the back uses <strong>today &rarr; today + 7 days</strong> (one week).</li>
+  <li>Returns <code>DashboardAgendaItem[]</code> (id, title, time, person, calendarColor, attendees). The former <code>visibility</code> field is <strong>removed</strong> (no source since PERSONAL/SHARED was dropped, C1).</li>
+</ul>
+
+<h2>Reminders</h2>
+<p><code>reminderMinutesBefore</code> is <strong>stored and exposed only</strong> (decision C6); no back-side triggering. Active notifications (scheduler + channel) are a dedicated cross-cutting brainstorm later.</p>
+
+<h2>API contract — front deltas</h2>
+<p>The React front + Fastify mock is the reference. This brainstorm introduces the following deltas; the front will follow:</p>
+<table>
+  <tr><th>Area</th><th>Front today</th><th>Decided</th></tr>
+  <tr><td>Calendar struct</td><td><code>type: SHARED|PERSONAL</code>, <code>familyId?</code></td><td>removed; ownership + sharing are cross-cutting (C1)</td></tr>
+  <tr><td>Event time</td><td><code>date</code>, <code>time</code>, <code>duration</code> required</td><td>add <code>allDay</code>, <code>endDate?</code>; <code>time</code>/<code>duration</code> optional (C2)</td></tr>
+  <tr><td>Event kind</td><td>none</td><td>add <code>kind: EVENT|TASK</code> + <code>done</code> (C5)</td></tr>
+  <tr><td>Invites</td><td><code>invites?: string[]</code> (emails)</td><td>member <strong>usernames</strong> (C4)</td></tr>
+  <tr><td>Reminder</td><td>none</td><td>add <code>reminderMinutesBefore?</code> (C6)</td></tr>
+  <tr><td>Summary</td><td><code>/summary</code> no params</td><td>add <code>from</code>/<code>to</code> query params, default today &rarr; today+7 (C7)</td></tr>
+  <tr><td>Agenda item</td><td><code>visibility</code> field</td><td><strong>removed</strong> (no source after C1)</td></tr>
+</table>
+<p>Existing endpoints kept: list/get/create/update/delete calendars, and nested create/update/delete events under <code>/families/{familyId}/calendars/{calendarId}/events</code>. The <code>familyId</code> path segment is a front grouping; the back resolves access via the owner/share of the calendar.</p>
+
+<h2>Errors &amp; HTTP codes</h2>
+<p>Project common principle, standard web codes: <strong>404</strong> absent/invisible calendar or event, <strong>403</strong> visible without the required right, <strong>400</strong> invalid input (temporal rules above, bad date/time format). Nothing domain-specific.</p>
+
+<h2>Listed edge cases</h2>
+<ul>
+  <li><strong>endDate &lt; date</strong> → 400.</li>
+  <li><strong>Timed event with endDate</strong>, or <strong>allDay with time/duration</strong> → reject/normalize per the temporal table → 400 on conflict.</li>
+  <li><strong>done on an EVENT</strong> → ignored (stays false).</li>
+  <li><strong>Invitee who is not a family member</strong> → out of scope; invites are members only.</li>
+  <li><strong>Invitee with no share</strong> → event shows in their agenda but the calendar itself stays 404 to them.</li>
+  <li><strong>Recurring multi-day all-day event</strong> → allowed; each occurrence spans [date, endDate] shifted by the rule.</li>
+  <li><strong>Summary without from/to</strong> → back applies the default window today &rarr; today + 7 days (C7).</li>
+</ul>
+
+<h2>Open points</h2>
+<p>None.</p>
+
+<h2>Decisions journal (revisable)</h2>
+<ul>
+  <li><strong>C1</strong> — Calendar is <strong>user-owned</strong>; sharing via the cross-cutting mechanism. No <code>type</code>/<code>familyId</code>/<code>visibility</code> on the calendar. The <code>families/{id}</code> path is a front grouping.</li>
+  <li><strong>C2</strong> — Add <code>allDay</code> + <code>endDate?</code>; <code>time</code>/<code>duration</code> only for timed mono-day events.</li>
+  <li><strong>C3</strong> — Recurrence is a simple infinite rule, no end, no per-occurrence exception; editing affects the whole series; back expands occurrences in the agenda window.</li>
+  <li><strong>C4</strong> — Invitee = member (username); being invited surfaces the event in their agenda without granting calendar access; "invite the family" is a front expansion.</li>
+  <li><strong>C5</strong> — Event <code>kind</code> EVENT/TASK + <code>done</code> (meaningful for TASK only).</li>
+  <li><strong>C6</strong> — <code>reminderMinutesBefore</code> stored/exposed only, no triggering.</li>
+  <li><strong>C7</strong> — Agenda summary aggregates all accessible calendars + invited events over a parametrable <code>[from, to]</code> window (default today &rarr; today+7), recurrences expanded. The agenda item's <code>visibility</code> field is removed (no source after C1).</li>
+</ul>
 </body>
 </html>

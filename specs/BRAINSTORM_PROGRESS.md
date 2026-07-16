@@ -17,7 +17,7 @@ Pour chaque thème (= 1 fichier `specs/functional/*.md`) :
 - **État du code (constat initial)** :
   - Front React = avancé. Mock Fastify riche (CRUD complet sur la plupart des domaines).
   - Back Rust = réel sur **user / family / magic_list** ; **bank_account** lecture seule ; **calendar / recipe / meal / shopping_list** = stubs renvoyant `[]`.
-
+    
 ## Ordre des thèmes & statut
 
 | # | Thème (fichier) | Spec init | Back Rust | Front React | Brainstorm |

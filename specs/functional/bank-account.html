@@ -24,20 +24,21 @@
 <body>
 <h1>Bank accounts</h1>
 <dl class="meta">
-  <dt>Date</dt><dd>2026-06-25</dd>
+  <dt>Date</dt><dd>2026-06-25 (rev. 2026-07-16)</dd>
   <dt>Status</dt><dd>draft — brainstorm done, ready for implementation strategy</dd>
   <dt>Theme</dt><dd>#4 bank accounts (front real / back read-only)</dd>
 </dl>
 
 <h2>Context</h2>
-<p>Track family and personal money: an account holds a starting balance and four kinds of movement — recurring <strong>charges</strong> (out), one-off <strong>credits</strong> (in), one-off <strong>expenses</strong> (out), and <strong>budgets</strong> (spending envelopes with their own expenses). The user wants a per-month view with a real balance and a pessimistic end-of-month forecast.</p>
+<p>Track family and personal money: an account holds a starting balance and four kinds of movement — recurring <strong>charges</strong> (out), one-off <strong>credits</strong> (in), one-off <strong>expenses</strong> (out), and <strong>budgets</strong> (spending envelopes that expenses can be attached to). The user wants a per-month view with a real balance and a pessimistic end-of-month forecast.</p>
 <p>State of the code: the <strong>front</strong> is real (list, month detail, overviews, summary, and create operations). The <strong>back</strong> has the domain entities but is <strong>read-only stub</strong> (summary/overviews return <code>[]</code>; computed amounts hardcoded to 0). The front contract is the reference; deltas decided here are listed in their own section.</p>
+<p><strong>Dates are inclusive</strong> throughout: the named day is included (a budget from 2 May to 18 May covers both the 2nd and the 18th).</p>
 
 <h2>Ownership &amp; sharing</h2>
 <p>An account is <strong>user-owned</strong> (decision B1). The front fields <code>visibility</code> (SHARED/PERSONAL) and <code>familyId</code> are <strong>removed</strong>, and the back <code>Visibility</code> enum is dropped from this domain. Access beyond the owner is delegated to the cross-cutting sharing mechanism (see <a href="sharing.html">sharing.html</a>): owner has full rights; other users see/edit only through a matching <code>share</code> grant. Invisible account → 404; visible without write right → 403. The <code>families/{familyId}</code> path segment is a front grouping; the back resolves access via owner/share.</p>
 
 <h2>Data model</h2>
-<p>Only the database model is treated as technical here. Recurring amounts (charges, budgets) are <strong>versioned over time</strong> (decisions B3, B4): the amount is not a single column but a history of effective-dated versions.</p>
+<p>Only the database model is treated as technical here. A recurring charge/budget carries a <strong>single amount</strong>. Changing an amount is never an in-place edit of the past: you <strong>close</strong> the current charge/budget (end date on the last day of the previous month) and <strong>create a new one</strong> for the current month onward (decisions B3, B4). A <strong>budget expense is not a separate entity</strong> — it is an <code>Expense</code> attached to a budget via a nullable <code>budget_id</code> (decision B9).</p>
 <pre><code>pub struct BankAccount {
     pub id: i32,
     pub name: String,
@@ -54,9 +55,9 @@ pub struct Charge {                  // recurring outflow
     pub account_id: i32,
     pub description: String,
     pub periodicity: ChargePeriodicity,  // MONTHLY | YEARLY
+    pub amount: BigDecimal,
     pub start_date: NaiveDate,
-    pub stop_date: Option&lt;NaiveDate&gt;,    // set on delete (B8)
-    pub amounts: Vec&lt;AmountVersion&gt;,     // versioned (B4)
+    pub end_date: Option&lt;NaiveDate&gt;,     // closes the recurrence (B8); also how the amount changes (B4)
 }
 
 pub struct Budget {                  // spending envelope
@@ -64,16 +65,10 @@ pub struct Budget {                  // spending envelope
     pub account_id: i32,
     pub name: String,
     pub periodicity: BudgetPeriodicity,  // MONTHLY | YEARLY | ONE_SHOT
-    pub start_date: NaiveDate,
-    pub stop_date: Option&lt;NaiveDate&gt;,    // set on delete (B8)
-    pub amounts: Vec&lt;AmountVersion&gt;,     // versioned (B3)
-    pub expenses: Vec&lt;BudgetExpense&gt;,
-}
-
-pub struct AmountVersion {           // versioned amount of a charge / budget
-    pub id: i32,
     pub amount: BigDecimal,
-    pub effective_from: NaiveDate,   // applies from this period onward (B3)
+    pub start_date: NaiveDate,
+    pub end_date: Option&lt;NaiveDate&gt;,     // closes the recurrence (B8); also how the amount changes (B3)
+    // its expenses are Expense rows whose budget_id points here
 }
 
 pub struct Credit {                  // one-off inflow (B5)
@@ -84,28 +79,20 @@ pub struct Credit {                  // one-off inflow (B5)
     pub credit_date: NaiveDate,
 }
 
-pub struct Expense {                 // one-off outflow, outside any budget
+pub struct Expense {                 // one-off outflow, optionally attached to a budget
     pub id: i32,
     pub account_id: i32,
+    pub budget_id: Option&lt;i32&gt;,       // Some → consumes that budget's month; None → outside any budget (B9)
     pub description: String,
     pub amount: BigDecimal,
     pub expense_date: NaiveDate,     // when it happened — drives the month (B7)
     pub debit_date: NaiveDate,       // when it hits the account — drives actual/forecast (B2)
 }
 
-pub struct BudgetExpense {           // outflow inside a budget envelope
-    pub id: i32,
-    pub budget_id: i32,
-    pub description: String,
-    pub amount: BigDecimal,
-    pub expense_date: NaiveDate,
-    pub debit_date: NaiveDate,
-}
-
 pub enum ChargePeriodicity { Monthly, Yearly }
 pub enum BudgetPeriodicity { Monthly, Yearly, OneShot }</code></pre>
-<p><strong>Tables:</strong> <code>bank_accounts</code>, <code>charges</code>, <code>charge_amounts</code> (versions), <code>budgets</code>, <code>budget_amounts</code> (versions), <code>budget_expenses</code>, <code>credits</code>, <code>expenses</code>. Sharing reuses the cross-cutting <code>shares</code> table — no family/visibility column anywhere.</p>
-<p><strong>JSON convention:</strong> camelCase (<code>startingAmount</code>, <code>startDate</code>, <code>creditDate</code>, <code>debitDate</code>, <code>effectiveFrom</code>, <code>createdAt</code>, <code>updatedAt</code>). Enums in <code>SCREAMING_SNAKE</code> (<code>MONTHLY</code>, <code>YEARLY</code>, <code>ONE_SHOT</code>). Mutations return the full <strong>BankAccount</strong> aggregate.</p>
+<p><strong>Tables:</strong> <code>bank_accounts</code>, <code>charges</code>, <code>budgets</code>, <code>credits</code>, <code>expenses</code> (an expense links to a budget via nullable <code>budget_id</code>). Sharing reuses the cross-cutting <code>shares</code> table — no family/visibility column anywhere.</p>
+<p><strong>JSON convention:</strong> camelCase (<code>startingAmount</code>, <code>startDate</code>, <code>endDate</code>, <code>creditDate</code>, <code>debitDate</code>, <code>budgetId</code>, <code>createdAt</code>, <code>updatedAt</code>). Enums in <code>SCREAMING_SNAKE</code> (<code>MONTHLY</code>, <code>YEARLY</code>, <code>ONE_SHOT</code>). Mutations return the full <strong>BankAccount</strong> aggregate.</p>
 
 <h2>The two dates</h2>
 <p>Every outflow carries two dates (decision B7):</p>
@@ -116,23 +103,23 @@ pub enum BudgetPeriodicity { Monthly, Yearly, OneShot }</code></pre>
 </table>
 <p>Example: <code>expenseDate=31/03</code>, <code>debitDate=02/04</code> → the expense belongs to <strong>March</strong>, but counts toward the real balance only once 02/04 is reached.</p>
 
-<h2>Budgets, charges and amount versioning</h2>
+<h2>Budgets, charges and changing amounts</h2>
 <p>A <strong>budget</strong> is a spending envelope; a <strong>charge</strong> is a recurring outflow. Both are recurring and aligned to calendar periods (decision B3):</p>
 <ul>
   <li><strong>MONTHLY</strong>: spans a whole calendar month, even if created mid-month (never 08/03→08/04).</li>
   <li><strong>YEARLY</strong>: spans the civil year, even if created mid-year.</li>
   <li><strong>ONE_SHOT</strong> (budget only): a single finite envelope.</li>
 </ul>
-<p><strong>Amount versioning</strong> (B3, B4): changing the amount applies to the period of the change <strong>and all following periods, never the past</strong>. The amount applicable to a period <code>P</code> is the latest version with <code>effectiveFrom &le; P</code>.</p>
-<p>Example: restaurant budget 1000 from 01/01/2026; changed to 2000 on 25/06 → 2000 for June–December 2026; changed again in July → applies July onward. June stays at the value it had.</p>
-<p>A recurring charge/budget is stored <strong>once</strong> with bounds <code>[startDate, stopDate?]</code>; the back <strong>projects one occurrence per period</strong> within the requested window. Charges are recurring only — a <strong>one-off outflow is an Expense</strong>, not a charge.</p>
+<p><strong>Changing an amount</strong> (B3, B4): the past is never edited. Instead, <strong>close</strong> the current charge/budget by setting its end date to the <strong>last day of the previous month</strong>, then <strong>create a new</strong> charge/budget with the new amount starting the current month. Current and future months use the new amount; past months keep the closed one.</p>
+<p>Example: restaurant budget 1000 from 01/01/2026; to move to 2000 in June, close the 1000 budget on 31/05/2026 and create a 2000 budget starting 01/06/2026. June onward is 2000; January–May stay 1000.</p>
+<p>A recurring charge/budget is stored <strong>once</strong> with bounds <code>[startDate, endDate?]</code> (both inclusive); the back <strong>projects one occurrence per period</strong> within the requested window. Charges are recurring only — a <strong>one-off outflow is an Expense</strong>, not a charge.</p>
 
 <h2>Computed amounts</h2>
 <p>For a requested month <code>M</code> (decisions B2, B7):</p>
 <table>
   <tr><th>Field</th><th>Definition</th></tr>
-  <tr><td><code>currentAmount</code> (budget)</td><td>applicable amount of the budget for <code>M</code> − sum of its budget expenses assigned to <code>M</code> (by <code>expenseDate</code>). The envelope's remaining money.</td></tr>
-  <tr><td><code>actualAmount</code></td><td>real balance: <code>startingAmount</code> + Σ(credits − charges − expenses − budget expenses) whose <code>debitDate &le; today</code>.</td></tr>
+  <tr><td><code>currentAmount</code> (budget)</td><td>the budget's amount for <code>M</code> − sum of the expenses attached to the budget assigned to <code>M</code> (by <code>expenseDate</code>). The envelope's remaining money.</td></tr>
+  <tr><td><code>actualAmount</code></td><td>real balance: <code>startingAmount</code> + Σ(credits − charges − expenses) whose <code>debitDate &le; today</code>.</td></tr>
   <tr><td><code>remainingAmount</code> / <code>endOfMonthForecast</code></td><td>pessimistic end-of-<code>M</code> balance: take everything assigned to ≤ <code>M</code> (debited or not) and <strong>reserve the full envelope</strong> of each active budget (instead of its actual expenses). Worst case. The two names are synonyms across views.</td></tr>
   <tr><td><code>totalCredits</code> / <code>totalExpenses</code></td><td>month <code>M</code> sums (by <code>creditDate</code> / <code>expenseDate</code>).</td></tr>
   <tr><td><code>monthLabel</code></td><td>display label, e.g. "Mars 2026".</td></tr>
@@ -143,10 +130,10 @@ pub enum BudgetPeriodicity { Monthly, Yearly, OneShot }</code></pre>
 <p>Full CRUD on the account and its sub-entities (decision B6). Every mutation returns the full <strong>BankAccount</strong> aggregate.</p>
 <ul>
   <li><strong>Account</strong>: create (name, startingAmount, startDate), rename, delete (cascade on sub-entities + sharing grants).</li>
-  <li><strong>Charge / budget — amount</strong>: editing the amount creates a <strong>version</strong> with <code>effectiveFrom = current period</code> (applies to that period and following).</li>
-  <li><strong>Charge / budget — name/description</strong>: plain non-versioned update.</li>
-  <li><strong>Charge / budget — delete</strong>: sets <code>stopDate</code> (stops the recurrence; past months keep it — decision B8).</li>
-  <li><strong>Credit / expense / budget expense</strong>: create, edit, plain delete (one-off, no versioning).</li>
+  <li><strong>Charge / budget — amount</strong>: not edited in place; <strong>close</strong> the current one (end date = last day of the previous month) and <strong>create</strong> a new charge/budget for the current month onward (B3, B4).</li>
+  <li><strong>Charge / budget — name/description</strong>: plain in-place update.</li>
+  <li><strong>Charge / budget — delete</strong>: sets <code>endDate</code> (stops the recurrence; past months keep it — decision B8).</li>
+  <li><strong>Credit / expense</strong>: create, edit, plain delete (one-off). An expense may carry a <code>budgetId</code> to attach it to a budget (B9).</li>
 </ul>
 
 <h2>Views &amp; endpoints</h2>
@@ -155,29 +142,30 @@ pub enum BudgetPeriodicity { Monthly, Yearly, OneShot }</code></pre>
   <li><code>GET /summary</code> → dashboard items: <code>{ id, name, actualAmount, endOfMonthForecast }</code>.</li>
   <li><code>GET /overviews?month=YYYY-MM</code> → per-account overview for the month (startingAmount, actualAmount, remainingAmount, totalCredits, totalExpenses, budgets with remainingAmount).</li>
   <li><code>GET /{id}?year=&amp;month=</code> → month detail (monthLabel, remainingAmount, actualAmount, budgets as month views, charges, credits, expenses).</li>
-  <li>Create operations: account, budget, budget expense, charge, credit, expense (plus the update/delete added by B6).</li>
+  <li>Create operations: account, budget, charge, credit, expense (an expense may target a budget via <code>budgetId</code>) — plus the update/delete added by B6.</li>
 </ul>
 
 <h2>API contract — front deltas</h2>
 <table>
   <tr><th>Area</th><th>Front today</th><th>Decided</th></tr>
   <tr><td>Account struct</td><td><code>visibility</code>, <code>familyId</code></td><td>removed; ownership + sharing cross-cutting (B1)</td></tr>
-  <tr><td>Charge / budget amount</td><td>single <code>amount</code>/<code>initialAmount</code></td><td>versioned (<code>effectiveFrom</code> history) (B3, B4)</td></tr>
-  <tr><td>Budget periodicity</td><td>none</td><td>add <code>periodicity</code> MONTHLY/YEARLY/ONE_SHOT + <code>startDate</code>/<code>stopDate</code> (B3)</td></tr>
-  <tr><td>Charge bounds</td><td><code>debitDate</code> only</td><td>add <code>startDate</code>/<code>stopDate</code> for recurrence (B8)</td></tr>
+  <tr><td>Charge / budget amount</td><td>single <code>amount</code>/<code>initialAmount</code></td><td>single amount; change via <strong>close + recreate</strong> (B3, B4)</td></tr>
+  <tr><td>Budget periodicity</td><td>none</td><td>add <code>periodicity</code> MONTHLY/YEARLY/ONE_SHOT + <code>startDate</code>/<code>endDate</code> (B3)</td></tr>
+  <tr><td>Charge bounds</td><td><code>debitDate</code> only</td><td>add <code>startDate</code>/<code>endDate</code> for recurrence (B8)</td></tr>
+  <tr><td>Budget expense</td><td>separate entity</td><td>folded into <code>Expense</code> via nullable <code>budgetId</code> (B9)</td></tr>
   <tr><td>Write scope</td><td>create only</td><td>full CRUD (B6)</td></tr>
 </table>
 <p>The front will follow these deltas.</p>
 
 <h2>Errors &amp; HTTP codes</h2>
-<p>Project common principle, standard web codes: <strong>404</strong> absent/invisible account or sub-entity, <strong>403</strong> visible without the required right, <strong>400</strong> invalid input (amount ≤ 0, bad dates, <code>stopDate &lt; startDate</code>, <code>effectiveFrom</code> before the entity start).</p>
+<p>Project common principle, standard web codes: <strong>404</strong> absent/invisible account or sub-entity, <strong>403</strong> visible without the required right, <strong>400</strong> invalid input (amount ≤ 0, bad dates, <code>endDate &lt; startDate</code>, <code>budgetId</code> pointing at another account's budget).</p>
 
 <h2>Listed edge cases</h2>
 <ul>
   <li><strong>expenseDate ≠ debitDate across a month boundary</strong> → month by <code>expenseDate</code>, actual/forecast by <code>debitDate</code> (B7).</li>
-  <li><strong>Amount changed mid-period</strong> → applies to that period onward; previous periods keep their version (B3, B4).</li>
-  <li><strong>Deleting a recurring charge/budget</strong> → stop from a date; past months unaffected (B8).</li>
-  <li><strong>Budget expense exceeding the envelope</strong> → allowed; <code>currentAmount</code> goes negative (forecast already reserves the full envelope).</li>
+  <li><strong>Changing an amount</strong> → close the current charge/budget at the end of the previous month, create a new one from the current month; past months keep the old amount (B3, B4).</li>
+  <li><strong>Deleting a recurring charge/budget</strong> → set an end date; past months unaffected (B8).</li>
+  <li><strong>An expense attached to a budget exceeding the envelope</strong> → allowed; <code>currentAmount</code> goes negative (forecast already reserves the full envelope).</li>
   <li><strong>Future-month view</strong> → nothing debited yet, so <code>actualAmount</code> = opening balance; <code>remainingAmount</code> = projection.</li>
   <li><strong>One-off outflow</strong> → an Expense, never a charge.</li>
 </ul>
@@ -189,14 +177,16 @@ pub enum BudgetPeriodicity { Monthly, Yearly, OneShot }</code></pre>
 <ul>
   <li><strong>B1</strong> — Account is user-owned; sharing cross-cutting. <code>visibility</code>/<code>familyId</code> removed; <code>Visibility</code> enum dropped from this domain.</li>
   <li><strong>B2</strong> — <code>actualAmount</code> = starting + transactions debited (<code>debitDate &le; today</code>); <code>remainingAmount</code>/<code>endOfMonthForecast</code> = worst-case end of month (undebited included + budgets reserved at 100%).</li>
-  <li><strong>B3</strong> — Budget periodicity MONTHLY (calendar month) / YEARLY (civil year) / ONE_SHOT; amount versioned (change applies to its period and following, never past).</li>
-  <li><strong>B4</strong> — Charges use the same versioned-amount logic.</li>
+  <li><strong>B3</strong> — Budget periodicity MONTHLY (calendar month) / YEARLY (civil year) / ONE_SHOT; a single amount, changed by <strong>closing</strong> the budget (end date = last day of the previous month) and <strong>creating a new one</strong> — never editing the past.</li>
+  <li><strong>B4</strong> — Charges carry a single amount and use the same <strong>close + recreate</strong> logic to change it.</li>
   <li><strong>B5</strong> — Credits are one-off only (salary is never identical month to month, so not recurring).</li>
   <li><strong>B6</strong> — Full CRUD on account + sub-entities.</li>
   <li><strong>B7</strong> — Month assignment by <code>expenseDate</code>; <code>debitDate</code> drives the actual/forecast split.</li>
-  <li><strong>B8</strong> — Deleting a recurring charge/budget stops it from a date; the past is kept.</li>
+  <li><strong>B8</strong> — Deleting a recurring charge/budget sets an end date; the past is kept.</li>
+  <li><strong>B9</strong> — A budget expense is not a separate entity: it is an <code>Expense</code> with a <code>budgetId</code>, consuming that budget's month.</li>
   <li><strong>Charge = recurring only</strong> (MONTHLY/YEARLY); a one-off outflow is an Expense.</li>
   <li><strong><code>endOfMonthForecast</code> = <code>remainingAmount</code></strong> — same computation, two names depending on the view.</li>
+  <li><strong>Dates are inclusive</strong> — the named day is included in every range.</li>
 </ul>
 </body>
 </html>

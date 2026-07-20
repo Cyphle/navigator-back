@@ -24,11 +24,117 @@
 <body>
 <h1>Dashboard</h1>
 <dl class="meta">
-  <dt>Date</dt><dd>2026-06-24</dd>
-  <dt>Status</dt><dd>empty — to be defined</dd>
+  <dt>Date</dt><dd>2026-07-16</dd>
+  <dt>Status</dt><dd>draft — brainstorm done, ready for implementation strategy</dd>
+  <dt>Theme</dt><dd>#6 dashboard (front real / back stub)</dd>
 </dl>
 
 <h2>Context</h2>
-<p>To be defined.</p>
+<p>The dashboard is a <strong>personalizable weekly glance</strong> at the home page: a grid of <strong>widgets</strong> a user arranges to see, at a glance and without clicking, what matters for the <strong>current week</strong> across the other domains (calendar, meals, magic lists, bank accounts). Each user composes their own layout; the family in context scopes the entities a widget can point at.</p>
+<p>State of the code: the <strong>front</strong> is real but <strong>predates this design</strong> — the home page shows a <em>fixed</em> set of sections (3 stat cards, agenda, magic lists, meals, bank accounts) built from five per-domain summary calls, plus a dormant aggregated <code>GET dashboard/:familyId</code> endpoint returning a static fixture. The <strong>back</strong> is a stub (summary returns <code>[]</code>). The front contract is the reference but evolves here; the realignments are listed in their own section.</p>
+<p><strong>The week</strong> is the current calendar week, <strong>Monday → Sunday</strong>, dates inclusive.</p>
+
+<h2>Ownership &amp; personalization</h2>
+<p>A dashboard layout is <strong>personal</strong> — it belongs to a user and is never shared (decision D3). It is scoped <strong>per (user, family)</strong>: the same user gets a distinct layout in each family they belong to, because pinned widgets point at that family's entities. The layout is not a shareable resource, so the cross-cutting sharing mechanism does not apply to it (pinned <em>entities</em> still obey their own sharing — a widget can only pin something the user may access).</p>
+<p>When the user has <strong>no family</strong>, the home page short-circuits to the existing "no family" overlay; no dashboard renders.</p>
+
+<h2>Widgets</h2>
+<p>A widget is one card on the grid. Two families (decision D5):</p>
+<ul>
+  <li><strong>Global</strong> widgets are <strong>singletons</strong>: at most one per layout, no entity to pick.</li>
+  <li><strong>Pinnable</strong> widgets are <strong>instanceable</strong>: added several times, each <strong>pinned to one entity</strong> (a specific list, account or calendar).</li>
+</ul>
+<table>
+  <tr><th>Widget</th><th>Kind</th><th>Family</th><th>Content</th></tr>
+  <tr><td>Agenda of the week</td><td><code>AGENDA_WEEK</code></td><td>global</td><td>Calendar entries (EVENT + TASK) of the current week, <strong>grouped by day</strong> (Mon→Sun, empty days shown), across all visible calendars + events where the user is an invitee.</td></tr>
+  <tr><td>Meals of the week</td><td><code>MEALS_WEEK</code></td><td>global</td><td>The menu per day (recipes placed on each day of the week; a dish spanning several days shows on each). Days with no meal are lightly flagged. Link to the shopping list.</td></tr>
+  <tr><td>Pressing tasks</td><td><code>PRESSING_TASKS</code></td><td>global</td><td>Uncompleted TASK-list items whose <code>dueDate</code> is within the current week or overdue, across all visible magic lists, sorted by <code>dueDate</code> (decision D7).</td></tr>
+  <tr><td>All accounts</td><td><code>ALL_ACCOUNTS</code></td><td>global</td><td>Overview of every visible bank account: <code>actualAmount</code> + <code>endOfMonthForecast</code> (current month).</td></tr>
+  <tr><td>Shopping-list shortcut</td><td><code>SHOPPING_LIST</code></td><td>global</td><td>Direct access to the Magic List generated from the current meal selection (or a prompt to generate it if none).</td></tr>
+  <tr><td>List: ‹X›</td><td><code>MAGIC_LIST</code></td><td>pinnable</td><td>The items of one specific magic list (respecting its type).</td></tr>
+  <tr><td>Account: ‹X›</td><td><code>BANK_ACCOUNT</code></td><td>pinnable</td><td>One specific account: <code>actualAmount</code> + <code>endOfMonthForecast</code> (current month).</td></tr>
+  <tr><td>Calendar: ‹X›</td><td><code>CALENDAR</code></td><td>pinnable</td><td>The current week of one specific calendar.</td></tr>
+</table>
+<p>Bank-account widgets are <strong>monthly</strong> (current month), not weekly — the account domain is month-based; everything else is framed on the week.</p>
+<p>A pinned widget whose entity <strong>disappears</strong> (deleted, or the user loses access) is kept but flagged <strong>unavailable</strong> and can be removed; the back does not auto-prune it (decision D10).</p>
+
+<h2>Grid &amp; customization</h2>
+<p>The grid has <strong>2 columns</strong> (collapsing to 1 on mobile). Each widget carries a <strong>width</strong> (<code>colSpan</code> 1 or 2) and a <strong>height</strong> (<code>COMPACT</code> | <code>NORMAL</code> | <code>TALL</code>). Widgets <strong>flow top-to-bottom</strong> by <code>position</code>; there is no free x/y placement (decision D2). Height caps how many items a widget shows before a "+N more" affordance.</p>
+<p>A <strong>"Customize"</strong> mode lets the user add a widget from the catalog, drag to reorder, resize (width/height), and remove. A new user starts on a <strong>default layout</strong> (decision D6): Agenda of the week (2 col) + Meals of the week (2 col) + Pressing tasks (1 col) + All accounts (1 col).</p>
+
+<h2>Data model</h2>
+<p>Only the database model is treated as technical here. A layout is a flat list of widget rows owned by a user within a family.</p>
+<pre><code>pub struct DashboardWidget {
+    pub id: i32,
+    pub owner_username: String,
+    pub family_id: i32,
+    pub kind: WidgetKind,
+    pub entity_id: Option&lt;i32&gt;,       // required for pinnable kinds; None for globals
+    pub col_span: i16,               // 1 | 2
+    pub height: WidgetHeight,        // COMPACT | NORMAL | TALL
+    pub position: i16,               // order within the layout
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+
+pub enum WidgetKind {
+    AgendaWeek, MealsWeek, PressingTasks, AllAccounts, ShoppingList,  // global
+    MagicList, BankAccount, Calendar,                                 // pinnable
+}
+pub enum WidgetHeight { Compact, Normal, Tall }</code></pre>
+<p><strong>Table:</strong> <code>dashboard_widgets</code>. A <strong>global</strong> kind appears at most once per <code>(owner_username, family_id)</code>; a <strong>pinnable</strong> kind is unique per <code>(owner_username, family_id, kind, entity_id)</code> (no duplicate pin). <code>entity_id</code> has no foreign key (it is polymorphic — a list, account or calendar depending on <code>kind</code>), so the widget survives the entity and is flagged unavailable at read time.</p>
+<p><strong>JSON convention:</strong> camelCase (<code>familyId</code>, <code>entityId</code>, <code>colSpan</code>, <code>height</code>, <code>position</code>, <code>createdAt</code>, <code>updatedAt</code>). Enums in <code>SCREAMING_SNAKE</code>. Mutations return the full widget layout (the ordered list).</p>
+
+<h2>API contract — endpoints</h2>
+<p>The dashboard endpoint serves and edits only the <strong>layout</strong>; widget <strong>content</strong> reuses each domain's existing summary endpoints — the front composes (decision D8). Under <code>families/{familyId}/dashboard</code>:</p>
+<ul>
+  <li><code>GET /widgets</code> → the caller's layout for the family: ordered <code>[{ id, kind, entityId?, colSpan, height, position }]</code>.</li>
+  <li><code>POST /widgets</code> → add a widget (<code>kind</code>, <code>entityId?</code>, <code>colSpan</code>, <code>height</code>, <code>position</code>).</li>
+  <li><code>PATCH /widgets/{id}</code> → move/resize (<code>position</code>, <code>colSpan</code>, <code>height</code>).</li>
+  <li><code>DELETE /widgets/{id}</code> → remove.</li>
+</ul>
+<p>Widget content comes from: calendar summary scoped to the current week (agenda / calendar widgets), magic-lists summary + list detail (pressing-tasks / list widgets), bank-accounts summary (all-accounts / account widgets), the meal selection of the week and its generated shopping list (meals / shopping-list widgets).</p>
+
+<h2>Front deltas (realignment)</h2>
+<p>The current home page predates recent decisions and is realigned here:</p>
+<table>
+  <tr><th>Area</th><th>Front today</th><th>Decided</th></tr>
+  <tr><td>Layout</td><td>fixed sections + 3 stat cards</td><td>widget grid, personalizable; <strong>stat cards removed</strong> (D9)</td></tr>
+  <tr><td>Aggregation</td><td>dormant <code>GET dashboard/:familyId</code> static fixture</td><td>layout endpoint + per-domain summaries (D8)</td></tr>
+  <tr><td>Agenda window</td><td>no real window (baked strings)</td><td>current calendar week Mon→Sun (D11); supersedes the rolling j→j+7 the calendar summary uses elsewhere</td></tr>
+  <tr><td>Visibility vocab</td><td><code>PERSONAL | FAMILY</code></td><td><code>PERSONAL | SHARED</code> (derived), per the sharing model</td></tr>
+  <tr><td>Meals</td><td><code>selectedForWeek</code> flag</td><td>removed; the week is derived from placements (recipes-meals R9)</td></tr>
+</table>
+
+<h2>Errors &amp; HTTP codes</h2>
+<p>Project common principle, standard web codes: <strong>401</strong> no session, <strong>404</strong> absent widget, <strong>403</strong> pinning a widget to an entity the user cannot access, <strong>400</strong> invalid input (<code>colSpan</code> ∉ {1,2}, <code>entityId</code> missing for a pinnable kind or present for a global kind), <strong>409</strong> a second instance of a global kind, or a duplicate pin.</p>
+
+<h2>Listed edge cases</h2>
+<ul>
+  <li><strong>Pinned entity deleted / unshared</strong> → widget kept, flagged unavailable at read time; user removes it; back does not auto-prune (D10).</li>
+  <li><strong>Second instance of a global widget</strong> → rejected (409).</li>
+  <li><strong>Empty week</strong> (no events / no meal) → the widget renders its own empty state; meal days with nothing are flagged.</li>
+  <li><strong>Account widgets under a weekly frame</strong> → they stay monthly (current month); only their card is not week-scoped.</li>
+  <li><strong>No family</strong> → home overlay, no dashboard; queries gated on a family id.</li>
+  <li><strong>Concurrent reorder</strong> → last write wins on <code>position</code>.</li>
+</ul>
+
+<h2>Open points</h2>
+<p>None.</p>
+
+<h2>Decisions journal (revisable)</h2>
+<ul>
+  <li><strong>D1</strong> — Dashboard = personalizable weekly glance, current calendar week Mon→Sun (dates inclusive).</li>
+  <li><strong>D2</strong> — Grid of 2 columns; each widget has a width (<code>colSpan</code> 1|2) and a height (COMPACT/NORMAL/TALL); widgets flow top-to-bottom by <code>position</code>, no free x/y placement.</li>
+  <li><strong>D3</strong> — A layout is personal (never shared) and scoped per (user, family).</li>
+  <li><strong>D4</strong> — Catalog: globals (Agenda week, Meals week, Pressing tasks, All accounts, Shopping-list shortcut) + pinnables (Magic list, Bank account, Calendar).</li>
+  <li><strong>D5</strong> — Global widgets are singletons; pinnable widgets are multiple, each bound to one entity.</li>
+  <li><strong>D6</strong> — Default layout for a new user: Agenda + Meals + Pressing tasks + All accounts.</li>
+  <li><strong>D7</strong> — Pressing tasks = uncompleted TASK-list items with <code>dueDate</code> in the current week or overdue, all visible lists, sorted by <code>dueDate</code>.</li>
+  <li><strong>D8</strong> — The dashboard endpoint serves only the layout; widget content reuses each domain's existing summary endpoints.</li>
+  <li><strong>D9</strong> — Stat cards / counters removed.</li>
+  <li><strong>D10</strong> — A pinned widget whose entity disappears is kept and flagged unavailable; the back never auto-prunes it.</li>
+  <li><strong>D11</strong> — The dashboard agenda uses the current calendar week Mon→Sun (not the rolling j→j+7 window the calendar summary uses elsewhere).</li>
+</ul>
 </body>
 </html>

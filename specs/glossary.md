@@ -290,3 +290,37 @@
 - **Description** : Entité du livre de recettes : nom, catégorie, image de présentation, ingrédients structurés, étapes ordonnées, note partagée ; CRUD complet.
 - **Alternatives** : —
 - **Exemples** : une recette `PLAT` avec ses ingrédients et ses étapes.
+
+---
+
+## family
+
+### Administrateur de famille
+- **Anglais / code** : Family admin (`is_admin` sur `family_members`, exposé `role: ADMIN`)
+- **Description** : Rôle **collectif et révocable** dans une famille, source de tous les pouvoirs de gouvernance : inviter/retirer des membres, octroyer/révoquer l'admin, renommer, archiver, réactiver. Invariant : au moins **un** admin tant que la famille a des membres.
+- **Alternatives** : admin, rôle admin ; à distinguer de l'**Administration** (Transverse), qui vise un élément partagé et reste réservée à son propriétaire.
+- **Exemples** : n'importe quel admin peut promouvoir un membre ou retirer l'admin d'un autre (créateur inclus), tant qu'il reste un admin.
+
+### Créateur
+- **Anglais / code** : Creator (`created_by` sur `families`)
+- **Description** : Utilisateur qui a créé la famille, conservé comme **attribut d'audit immuable** ; il n'a **aucun pouvoir permanent** (s'il perd l'admin, il redevient un membre ordinaire). Une famille n'a pas de propriétaire permanent.
+- **Alternatives** : à ne pas confondre avec le **Propriétaire** (Transverse), qui garde ses droits à vie.
+- **Exemples** : un créateur rétrogradé reste historisé comme créateur, mais ne peut plus rien configurer.
+
+### Famille
+- **Anglais / code** : Family (`Family`, table `families`)
+- **Description** : Groupe d'utilisateurs (les membres) support de l'organisation Navigator ; **gouvernée par le rôle admin**, pas par un propriétaire. Un utilisateur peut appartenir à plusieurs familles et en créer autant qu'il veut.
+- **Alternatives** : —
+- **Exemples** : sa propre famille et la famille de son conjoint, entre lesquelles il bascule.
+
+### Invitation
+- **Anglais / code** : Family invitation (`family_invitations`)
+- **Description** : Proposition faite par un admin à un **utilisateur Navigator existant** (désigné par email ou username) de rejoindre la famille ; **in-app**, en attente jusqu'à acceptation (l'invité devient membre) ou refus. Au plus une invitation en attente par (famille, utilisateur), sans expiration.
+- **Alternatives** : — (pas de lien/code partageable, pas d'onboarding d'un non-inscrit).
+- **Exemples** : inviter quelqu'un par email ; un admin peut annuler une invitation encore en attente.
+
+### Membre
+- **Anglais / code** : Family member (`family_members`)
+- **Description** : Utilisateur appartenant à une famille, avec un rôle (membre simple ou administrateur). Tout membre peut **quitter** la famille de lui-même ; seuls les admins invitent ou retirent des membres.
+- **Alternatives** : —
+- **Exemples** : un membre simple ne peut pas inviter ; le dernier admin ne peut partir sans promouvoir un autre membre.

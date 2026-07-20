@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Configuration</title>
+<title>Configuration — families &amp; profile</title>
 <style>
   :root { --ink:#1a1a1a; --muted:#666; --line:#d0d0d0; --code-bg:#f4f4f4; }
   body { color:var(--ink); background:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; max-width:50rem; margin:2rem auto; padding:0 1.25rem; }
@@ -19,19 +19,193 @@
   th { font-weight:600; background:var(--code-bg); }
   code { font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; background:var(--code-bg); padding:.05rem .3rem; border-radius:2px; font-size:.9em; }
   pre { background:var(--code-bg); padding:.75rem 1rem; overflow-x:auto; border:1px solid var(--line); border-radius:2px; } pre code { background:none; padding:0; }
+  .warn { border-left:3px solid var(--muted); padding:.4rem .8rem; background:var(--code-bg); margin:.75rem 0; }
 </style>
 </head>
 <body>
-<h1>Configuration</h1>
+<h1>Configuration — families &amp; profile</h1>
 <dl class="meta">
-  <dt>Date</dt><dd>2026-06-24</dd>
-  <dt>Status</dt><dd>skeleton — to be defined</dd>
+  <dt>Date</dt><dd>2026-06-24 (rev. 2026-07-17)</dd>
+  <dt>Status</dt><dd>brainstorm complete — see decisions journal (CF1→CF11) at the end</dd>
 </dl>
+<p>Two sub-domains under one theme: <strong>family governance</strong> (who is in a family, who can do what, how a family is born and dies) and the <strong>user profile</strong> (self-service, minimal). Authentication is delegated to Keycloak; <strong>all authorization lives in Navigator</strong>.</p>
 
-<h2>Family management</h2>
-<p>To be defined.</p>
+<h2>Scope &amp; boundary</h2>
+<ul>
+  <li><strong>Keycloak = authentication only</strong>: it proves <em>who you are</em> at login (email / username / password, OIDC tokens). It knows nothing about families or rights.</li>
+  <li><strong>Navigator = authorization + profile</strong>: family membership, the admin role, invitations and reactivation are all modelled in the Navigator database. Keycloak roles are <strong>not</strong> used for authorization.</li>
+</ul>
+
+<h2>Roles &amp; governance</h2>
+<h3>Creator — audit only</h3>
+<p>Every family records its <strong>creator</strong> (<code>created_by</code>): an <strong>immutable audit attribute</strong>. The creator has <strong>no permanent power</strong>. If they lose the admin role they become an ordinary member (or a non-member); they remain only <strong>historised</strong> as the creator. There is <strong>no permanent owner</strong> of a family.</p>
+<div class="warn">
+  <strong>Reconciliation with the sharing model.</strong> In <a href="sharing.html">sharing.html</a>, every shared element has a single permanent <strong>owner</strong> (its creator) who alone administers it. A <strong>family</strong> follows the opposite rule: no permanent owner, governance by a <strong>collective admin role</strong>; the creator is pure audit. The two models are intentionally different — an <em>element</em> is owned, a <em>family</em> is governed.
+</div>
+
+<h3>Admin role — source of all powers</h3>
+<p>All family powers derive from the <strong>admin</strong> role:</p>
+<ul>
+  <li>invite / remove members,</li>
+  <li>grant / revoke the admin role,</li>
+  <li>rename the family / change its photo,</li>
+  <li>archive the family and reactivate it.</li>
+</ul>
+<p>The creator is admin <strong>at creation</strong>. An admin can <strong>grant</strong> the admin role to any member ⇒ <strong>several admins are possible</strong>.</p>
+
+<h3>Revocation — "all revocable"</h3>
+<p>Any admin can <strong>revoke</strong> the admin role of anyone, <strong>including the creator</strong>. The only guard is an <strong>invariant: at least 1 admin</strong> as long as the family has members. Any operation that would leave a member-bearing family with <strong>zero admins</strong> is blocked.</p>
+
+<h2>Members</h2>
+<ul>
+  <li><strong>Invite &amp; remove: admins only.</strong> A plain member cannot invite or exclude anyone.</li>
+  <li><strong>Leave: everyone.</strong> Any member can leave the family on their own.</li>
+  <li><strong>Last admin</strong> cannot leave (nor be demoted / removed) without first <strong>promoting</strong> another member. Same invariant guards removal and demotion — you never remove the last admin.</li>
+  <li>If the last admin is also the <strong>last member</strong>, leaving <strong>archives</strong> the family (see End of life).</li>
+</ul>
+
+<h2>Invitations</h2>
+<p>An admin invites an <strong>existing Navigator user</strong> — identified by <strong>email or username</strong> (two ways to designate the same account). There is <strong>no external onboarding</strong> (no invite of a non-registered person) and <strong>no shareable link / code</strong>.</p>
+<p>Flow: admin invites → an <strong>in-app invitation</strong> is created (state <em>pending</em>) → the invitee <strong>accepts</strong> (becomes a member) or <strong>declines</strong>.</p>
+<p>Lifecycle rules:</p>
+<ul>
+  <li><strong>Decline</strong> → the invitation disappears; the admin may re-invite later.</li>
+  <li><strong>Cancel</strong> → an admin can cancel a still-pending invitation.</li>
+  <li><strong>No duplicate</strong> → at most one pending invitation per (family, user).</li>
+  <li><strong>No expiry</strong> → a pending invitation stays valid until someone acts on it.</li>
+</ul>
+
+<h2>Membership &amp; creation</h2>
+<ul>
+  <li>A user can belong to <strong>several families</strong> at once (e.g. their own family and their spouse's family).</li>
+  <li>A user can <strong>create as many families as they want</strong>; on creation they become <strong>creator + first admin</strong>.</li>
+  <li>Every family operation is <strong>scoped by <code>familyId</code></strong> (the user switches between their families).</li>
+</ul>
+
+<h2>End of life — soft delete with grace period</h2>
+<ol>
+  <li>A family becomes <strong>archived</strong> (soft delete): hidden, read-only, data kept. Triggers: an admin archives it explicitly, <strong>or</strong> the last member leaves.</li>
+  <li>During the grace window, <strong>any admin</strong> can <strong>reactivate</strong> it → back to active.</li>
+  <li>After <strong>X days</strong> without reactivation → <strong>hard delete</strong>: permanent purge.</li>
+</ol>
+<p>A family archived <strong>by abandonment</strong> has <strong>0 admins</strong>, so nobody can reactivate it → it always ends in hard delete. Only a family archived <strong>while it still has admins</strong> is reactivable.</p>
+<div class="warn">
+  <strong>Open point — scope of the hard-delete purge.</strong> The design says the purge removes the family's data (magic lists, bank accounts, calendar, recipes/meals). But per <a href="sharing.html">sharing.html</a> those resources are <strong>user-owned</strong> (personal, shared per user) — the back does <strong>not</strong> attach them to a family. So "the family's data" is ambiguous: it must be decided <strong>whether domain resources are family-scoped or user-scoped</strong> before the purge cascade can be specified. Until reconciled, the hard delete removes only the <strong>family itself and its membership / invitations</strong>; the fate of domain resources is <strong>TBD</strong>. The grace duration <strong>X</strong> is a constant to fix later (e.g. 30 days).
+</div>
 
 <h2>Profile</h2>
-<p>To be defined.</p>
+<p>Each user owns a <strong>Navigator profile</strong>, populated at first login from their Keycloak identity but independent afterwards. <strong>Minimal</strong> by design:</p>
+<ul>
+  <li><strong>Editable</strong> (self-service): <strong>display name</strong> (how the user appears to others — in lists, agenda, invitations…) and an optional <strong>photo / avatar</strong>.</li>
+  <li><strong>Read-only</strong> (from Keycloak): <strong>email</strong> and <strong>username</strong>, shown for identification, not editable in Navigator. Password is managed entirely by Keycloak.</li>
+  <li>No preferences (language, theme…) for now.</li>
+</ul>
+
+<h2>Data model</h2>
+<p><strong>Families</strong> — the family aggregate. Active ⇔ <code>archived_at IS NULL</code>.</p>
+<pre><code>CREATE TABLE families (
+    id           SERIAL PRIMARY KEY,
+    name         VARCHAR(120) NOT NULL,
+    photo_url    TEXT,                         -- optional
+    created_by   INTEGER     NOT NULL REFERENCES users(id),  -- immutable audit, no power
+    archived_at  TIMESTAMPTZ,                  -- NULL = active; set = soft-deleted (grace running)
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);</code></pre>
+<p><strong>Membership</strong> — one row per (family, user). The admin role is a boolean; exposed as <code>role</code> = <code>ADMIN</code> / <code>MEMBER</code>.</p>
+<pre><code>CREATE TABLE family_members (
+    family_id  INTEGER     NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+    user_id    INTEGER     NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
+    is_admin   BOOLEAN     NOT NULL DEFAULT FALSE,
+    joined_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (family_id, user_id)
+);</code></pre>
+<p><strong>Invitations</strong> — only <em>pending</em> rows exist (accept ⇒ membership row + delete; decline / cancel ⇒ delete). The unique key enforces "no duplicate".</p>
+<pre><code>CREATE TABLE family_invitations (
+    id          SERIAL PRIMARY KEY,
+    family_id   INTEGER     NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+    user_id     INTEGER     NOT NULL REFERENCES users(id)    ON DELETE CASCADE,  -- invitee, must exist
+    invited_by  INTEGER     NOT NULL REFERENCES users(id),                       -- the admin
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (family_id, user_id)                 -- at most 1 pending invite per (family, user)
+);</code></pre>
+<p><strong>Profile</strong> — added on the existing <code>users</code> table. <code>email</code> / <code>username</code> come from Keycloak (read-only in Navigator).</p>
+<pre><code>ALTER TABLE users
+    ADD COLUMN display_name VARCHAR(120),       -- editable
+    ADD COLUMN avatar_url   TEXT;               -- editable, optional
+-- email, username: synced from Keycloak, read-only</code></pre>
+<p>Notes:</p>
+<ul>
+  <li>The <strong>≥ 1 admin invariant</strong>, <strong>last-admin-cannot-leave</strong> and <strong>promote-before-leaving</strong> are enforced in the <strong>use case</strong> (not by a DB constraint).</li>
+  <li><strong>Hard delete</strong> is a scheduled purge running <strong>X days</strong> after <code>archived_at</code>; scoped to <code>families</code> + its <code>family_members</code> / <code>family_invitations</code> (cascade). Domain-resource purge is TBD (see open point above).</li>
+</ul>
+
+<h2>API</h2>
+<p>Resource-oriented, JSON <strong>camelCase</strong>, enums <strong>SCREAMING_SNAKE</strong>; mutations return the full aggregate (front is the reference contract).</p>
+<table>
+  <tr><th>Endpoint</th><th>Who</th><th>Purpose</th></tr>
+  <tr><td><code>GET /families</code></td><td>member</td><td>Families the caller belongs to (with their <code>role</code>, member count, <code>status</code>).</td></tr>
+  <tr><td><code>POST /families</code></td><td>any user</td><td>Create a family; caller becomes creator + admin.</td></tr>
+  <tr><td><code>GET /families/{id}</code></td><td>member</td><td>Detail: members (userId, displayName, avatarUrl, role), pending invitations (admins only).</td></tr>
+  <tr><td><code>PATCH /families/{id}</code></td><td>admin</td><td>Rename / change photo.</td></tr>
+  <tr><td><code>DELETE /families/{id}</code></td><td>admin</td><td>Archive (soft delete).</td></tr>
+  <tr><td><code>POST /families/{id}/reactivate</code></td><td>admin</td><td>Reactivate an archived family within the grace window.</td></tr>
+  <tr><td><code>DELETE /families/{id}/membership</code></td><td>member</td><td>Leave the family (blocked if last admin, unless promoting first).</td></tr>
+  <tr><td><code>DELETE /families/{id}/members/{userId}</code></td><td>admin</td><td>Remove a member (not the last admin).</td></tr>
+  <tr><td><code>PATCH /families/{id}/members/{userId}</code></td><td>admin</td><td>Change <code>role</code> (<code>ADMIN</code>⇄<code>MEMBER</code>); demotion respects the ≥ 1 admin invariant.</td></tr>
+  <tr><td><code>POST /families/{id}/invitations</code></td><td>admin</td><td>Invite by <code>email</code> or <code>username</code> (must resolve to an existing user).</td></tr>
+  <tr><td><code>DELETE /families/{id}/invitations/{invitationId}</code></td><td>admin</td><td>Cancel a pending invitation.</td></tr>
+  <tr><td><code>GET /invitations</code></td><td>invitee</td><td>The caller's own pending invitations.</td></tr>
+  <tr><td><code>POST /invitations/{id}/accept</code></td><td>invitee</td><td>Accept → become a member.</td></tr>
+  <tr><td><code>POST /invitations/{id}/decline</code></td><td>invitee</td><td>Decline → invitation removed.</td></tr>
+  <tr><td><code>GET /profile</code></td><td>self</td><td>Own profile (displayName, avatarUrl, email &amp; username read-only).</td></tr>
+  <tr><td><code>PATCH /profile</code></td><td>self</td><td>Update displayName / avatarUrl.</td></tr>
+</table>
+
+<h2>Errors &amp; HTTP codes</h2>
+<p>Follows the <strong>project error principle</strong> (see CLAUDE.md): each layer wraps &amp; re-maps, cause chain preserved via <code>#[source]</code>. Standard web codes:</p>
+<table>
+  <tr><th>Situation</th><th>Code</th></tr>
+  <tr><td>Not authenticated</td><td><strong>401</strong></td></tr>
+  <tr><td>Action reserved to admins (invite / remove / promote / rename / archive by a non-admin)</td><td><strong>403</strong></td></tr>
+  <tr><td>Family not found, or caller not a member (existence not revealed); invitee email/username matches no existing user</td><td><strong>404</strong></td></tr>
+  <tr><td>User already a member; duplicate pending invitation; would leave the family with 0 admins (last admin leave / remove / demote)</td><td><strong>409</strong></td></tr>
+  <tr><td>Invalid payload (neither email nor username given; empty name)</td><td><strong>400</strong></td></tr>
+  <tr><td>Technical error</td><td><strong>500</strong> (body neutralized, chain logged)</td></tr>
+</table>
+
+<h2>Edge cases</h2>
+<ol>
+  <li><strong>Last admin leaves / demoted / removed:</strong> blocked (409) — must promote another member first.</li>
+  <li><strong>Last member leaves:</strong> family archived; 0 admins ⇒ not reactivable ⇒ hard delete after X days.</li>
+  <li><strong>Invite a user already a member:</strong> 409.</li>
+  <li><strong>Duplicate pending invitation:</strong> 409 (unique key).</li>
+  <li><strong>Invite an email/username with no Navigator account:</strong> 404 (no external onboarding).</li>
+  <li><strong>Creator loses admin:</strong> keeps only the <code>created_by</code> audit trace; no reactivation power (reactivation belongs to <em>any admin</em>, not to the creator specifically).</li>
+  <li><strong>Reactivate past the grace window / an already-active family:</strong> 404 / 409.</li>
+  <li><strong>Deleting a user account:</strong> memberships &amp; invitations cascade; the effect on a family whose last admin was that user is TBD (tie-in with the account-deletion flow, out of scope here).</li>
+</ol>
+
+<h2>Decisions journal (revisable)</h2>
+<ul>
+  <li><strong>CF1 — Two sub-domains:</strong> family governance + minimal profile, under one "configuration" theme.</li>
+  <li><strong>CF2 — Creator = audit only:</strong> immutable <code>created_by</code>, no permanent power; no permanent family owner.</li>
+  <li><strong>CF3 — Admin role = source of all powers;</strong> the creator is admin at creation.</li>
+  <li><strong>CF4 — Grant admin:</strong> any admin can promote a member ⇒ several admins possible.</li>
+  <li><strong>CF5 — "All revocable":</strong> any admin can revoke anyone's admin (creator included); <strong>invariant ≥ 1 admin</strong> while the family has members.</li>
+  <li><strong>CF6 — Members:</strong> invite &amp; remove = admins only; leave = everyone; last admin must promote before leaving (same invariant guards remove / demote).</li>
+  <li><strong>CF7 — Invitations:</strong> by email/username of an <strong>existing</strong> user; in-app accept/decline; decline &amp; cancel remove it; no duplicate; no expiry. No external onboarding, no link/code.</li>
+  <li><strong>CF8 — Membership &amp; creation:</strong> multi-family membership; unlimited family creation (creator = first admin).</li>
+  <li><strong>CF9 — End of life:</strong> soft delete (archive) → reactivation by <strong>any admin</strong> within <strong>X days</strong> → else hard delete. Abandoned families (0 admins) are never reactivable.</li>
+  <li><strong>CF10 — Profile:</strong> minimal — editable display name + avatar; email/username read-only (Keycloak); no preferences.</li>
+  <li><strong>CF11 — AuthN/AuthZ boundary:</strong> Keycloak authenticates only; all authorization (families, roles, invitations) lives in the Navigator database.</li>
+</ul>
+
+<h2>Open points to reconcile</h2>
+<ul>
+  <li><strong>Hard-delete scope:</strong> depends on whether domain resources are family-scoped or user-scoped — currently user-scoped per <a href="sharing.html">sharing.html</a>. Until decided, hard delete purges only the family + membership + invitations.</li>
+  <li><strong>Grace duration X:</strong> constant to fix (e.g. 30 days).</li>
+  <li><strong>Account deletion:</strong> interaction with the ≥ 1 admin invariant when the deleted user was a family's last admin — to be defined with the account-lifecycle flow.</li>
+</ul>
 </body>
 </html>

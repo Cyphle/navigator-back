@@ -27,22 +27,25 @@ Pour chaque thème (= 1 fichier `specs/functional/*.md`) :
 | 3 | calendrier | mince | stub | réel | ✅ terminé |
 | 4 | comptes_bancaire | vide | lecture seule | réel | ✅ terminé |
 | 5 | recettes_repas_previsionnels | vide | stub | réel | ✅ terminé |
-| 6 | dashboard | vide | stub | réel | ⚪ à faire |
-| 7 | configuration (familles + profil) | squelette | partiel | partiel | ⚪ à faire |
+| 6 | dashboard | écrite | stub | réel | ✅ terminé |
+| 7 | configuration (familles + profil) | écrite | partiel | partiel | ✅ terminé |
 
 Légende : ⚪ à faire · 🔵 en cours · ✅ terminé
 
 ## Où on s'est arrêté (curseur)
 
-**Thème terminé : recettes_repas_previsionnels (#5) — brainstorm bouclé.**
-- Résultats → **`functional/recipes-meals.html`** (décisions R1→R9, modèle 7 tables, pont liste de courses → Magic List).
-- ⚠️ **Méthodo (retour user du 25/06)** : brainstorm = **use cases d'abord**, pas de questions techniques raccourcies (stocké vs dérivé, granularité…). Voir mémoire `brainstorm-use-case-first`.
-- Décisions structurantes : **R1** recette+sélection user-owned + `shares` ; **R2** recette plate (ingredients+steps, pas de parts), steps avec image, image de présentation ; **R3** ingrédient structuré `{quantity?, unit?, name}` ; **R4** upload géré par le back, stockage abstrait ; **R5** CRUD complet recettes ; **R6** note partagée + favori par membre ; **R7** sélection de repas SANS période figée, placements `(recette→jour)`, un plat peut couvrir plusieurs jours ; **R8** « valider » → Magic List cochable, ingrédients regroupés (même unité=somme ; unités ≠ = ligne marquée « à vérifier »), lien vers recettes sources, retrait best-effort ; **R9** pas de `selectedForWeek`, dashboard montre les recettes posées sur les jours visibles.
-- Modèle DB : `recipes`, `recipe_ingredients`, `recipe_steps`, `recipe_favorites`, `meal_selections`, `meal_selection_entries`, `shopping_list_links`. La liste de courses est une Magic List normale.
-- **Reprendre à** : prochain thème — #6 **dashboard** (agrège agenda/calendrier + repas + comptes + magic_list) ou #7 **configuration**.
+**🎉 Brainstorm COMPLET — les 7 thèmes sont terminés.**
+- Dernier thème bouclé : **configuration (#7)** → **`functional/configuration.html`** (décisions CF1→CF11).
+- Gouvernance famille : **créateur = audit seul** (aucun pouvoir permanent) ; **rôle admin = source de tous les pouvoirs**, « tous révocables » avec **invariant ≥ 1 admin** ; inviter/retirer = admins, quitter = tout le monde, dernier admin doit promouvoir avant de partir.
+- Invitations : email/username d'un **user existant**, **in-app** (accepter/décliner), pas de doublon, pas d'expiration. Multi-famille + création illimitée.
+- Fin de vie : **soft delete** → réactivation par **n'importe quel admin** dans X jours → sinon **hard delete**. Profil minimal (nom affiché + avatar ; email/username read-only Keycloak). **Frontière : Keycloak = authentification seule, autorisation = base Navigator.**
+- ⚠️ **Points à réconcilier** (notés dans la spec) : périmètre du hard-delete (ressources user-scoped vs family-scoped, cf. `sharing.html`), valeur de X, suppression de compte vs invariant admin.
+- **Prochaine étape** : le brainstorm est fini — passer à la **rédaction des tickets** (par vertical) ou à l'implémentation. Plus de thème à brainstormer.
 
 ### Historique
-- **#4 comptes_bancaire** ✅ → `functional/bank-account.html`. Décisions B1→B8. Compte user-owned, montants versionnés (budgets+charges), 2 dates (expenseDate→mois, debitDate→actual/forecast), CRUD complet, delete récurrent = arrêt daté.
+- **#7 configuration** ✅ → `functional/configuration.html`. Décisions CF1→CF11, 3 tables (`families`, `family_members`, `family_invitations`) + colonnes profil sur `users`. Créateur audit ; rôle admin collectif révocable (invariant ≥ 1) ; invitation in-app par email/username d'un user existant ; soft delete + réactivation admin + hard delete après X jours ; Keycloak = authN seul.
+- **#5 recettes_repas_previsionnels** ✅ → `functional/recipes-meals.html`. Décisions R1→R9, modèle 7 tables. Recette plate ; sélection de repas SANS période figée (placements recette→jour) ; « valider » → Magic List cochable (agrégation ingrédients). ⚠️ Méthodo user du 25/06 : use cases d'abord (mémoire `brainstorm-use-case-first`).
+- **#4 comptes_bancaire** ✅ → `functional/bank-account.html`. Décisions B1→B9. Compte user-owned ; changer un montant = **clôture + recréation** (date de fin au dernier jour du mois précédent, PAS de versionnement) ; **dépense de budget = Expense avec `budgetId`** (pas d'entité séparée) ; 2 dates (expenseDate→mois, debitDate→actual/forecast) ; dates inclusives ; CRUD complet.
 - **#3 calendrier** ✅ → `functional/calendar.html`. Décisions C1→C7. Calendrier user-owned, all-day+endDate, récurrence simple, invité=membre, kind EVENT/TASK, agenda fenêtre j→j+7.
 - **#2 transverse_partage** ✅ → `functional/sharing.html`. Partage **PAR USER**, table `shares` unique, « partager à une famille » = front. Décisions T1→T9.
 - **#1 magic_list** ✅ → `functional/magic-list.html`. Amendé pour cohérence partage par user (D5 obsolète).
